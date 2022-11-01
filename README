@@ -1,0 +1,11 @@
+The high resolution patch for BF1924 only works
+if the setting in Video.con file are exaclty the same as your
+monitor is configured. (width, height and refresh rate as well).
+
+execute this tool in the same directory where thet bf1942.exe is located
+The tool will automatically regenerate Video.con file for all profiles.
+
+It also will set the readonly file flag, so you cannot accidently modify
+it inside the game.
+
+Not the menu will still displayed in low resultion
