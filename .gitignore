@@ -48,8 +48,7 @@ m4/lt~obsolete.m4
 # (which is called by configure script))
 Makefile
 INSTALL
-bignum2
-bignum2.exe
+adjust_monitor_settings.exe
 
 # eclipse stuff
 .cproject

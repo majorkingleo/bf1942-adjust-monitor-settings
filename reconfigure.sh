@@ -10,10 +10,11 @@ DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 cd $DIR
 
-# just for automake
-# git log > ChangeLog
-
 export PATH=${PATH}:/mingw64/bin
+
+# just for automake
+git log > ChangeLog
+
 
 aclocal
 #autoheader
