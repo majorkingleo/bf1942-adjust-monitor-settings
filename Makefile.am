@@ -1,8 +1,19 @@
-bin_PROGRAMS=adjust_monitor_settings
+bin_PROGRAMS=adjust_monitor_settings \
+	create_desktop_icons
 
 adjust_monitor_settings_SOURCES=\
 		tools_config.h\
-		adjust_monitor_settings.cc
+		adjust_monitor_settings.cc \
+		common.cc \
+		common.h
+		
+create_desktop_icons_SOURCES=\
+		tools_config.h \
+		create_desktop_icons.cc \
+		common.cc \
+		common.h \
+		ShortcutProvider.h \
+		ShortcutProvider.cc
 			  
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/cpputils/cpputilsshared  \
@@ -66,9 +77,13 @@ adjust_monitor_settings_LDADD = \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a 
 
-LIBS=
+create_desktop_icons_LDADD = \
+	cpputils/cpputilsshared/libcpputilsshared.a \
+	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a 
+
+LIBS=-lole32 -luuid
 	
-AM_LDFLAGS= -static 
+AM_LDFLAGS= -static
 	
 if MINGW
 AM_LDFLAGS +=
