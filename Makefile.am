@@ -1,5 +1,6 @@
 bin_PROGRAMS=adjust_monitor_settings \
-	create_desktop_icons
+	create_desktop_icons \
+	list_monitor_resolutions
 
 adjust_monitor_settings_SOURCES=\
 		tools_config.h\
@@ -7,6 +8,10 @@ adjust_monitor_settings_SOURCES=\
 		common.cc \
 		common.h
 		
+list_monitor_resolutions_SOURCES=\
+		tools_config.h\
+		list_monitor_resolutions.cc
+				
 create_desktop_icons_SOURCES=\
 		tools_config.h \
 		create_desktop_icons.cc \
@@ -74,6 +79,10 @@ cpputils_cpputilsshared_cpputilsformat_libcpputilsformat_a_SOURCES= \
 adjust_monitor_settings_LDADD = \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a 
+
+list_monitor_resolutions_LDADD = \
+	cpputils/cpputilsshared/libcpputilsshared.a \
+	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a
 
 create_desktop_icons_LDADD = \
 	cpputils/cpputilsshared/libcpputilsshared.a \

@@ -50,6 +50,7 @@ Makefile
 INSTALL
 adjust_monitor_settings.exe
 create_desktop_icons.exe
+list_monitor_resolutions.exe
 
 # eclipse stuff
 .cproject
