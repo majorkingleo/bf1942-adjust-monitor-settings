@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <winuser.h>
 #include <cppdir.h>
-#include <cpputils.h>
+#include <stderr_exception.h>
 #include <xml.h>
 #include <string_utils.h>
 #include <set>
@@ -45,7 +45,7 @@ MonitorData get_monitor_data()
     DEVMODEA mode = {};
 
     if( !EnumDisplaySettingsA( nullptr, ENUM_CURRENT_SETTINGS, &mode ) ) {
-        throw REPORT_EXCEPTION( "failed calling EnumDisplaySettingsA");
+        throw STDERR_EXCEPTION( "failed calling EnumDisplaySettingsA");
     }
 
     return { mode.dmDisplayFrequency,
@@ -119,7 +119,7 @@ int main()
         }
 
         if( !f_bf1942_exe.is_valid() ) {
-            throw REPORT_EXCEPTION( "Cannot find user setting location.\n"
+            throw STDERR_EXCEPTION( "Cannot find user setting location.\n"
                                     "Please run this program in battlefield folder or profile settings folder");
         }
 
@@ -139,7 +139,7 @@ int main()
             CppDir::Directory dir( profiles_folder );
 
             if( !dir ) {
-                throw REPORT_EXCEPTION( format( "cannot list dir '%s'", profiles_folder));
+                throw STDERR_EXCEPTION( format( "cannot list dir '%s'", profiles_folder));
             }
 
             std::set<std::string> files_to_ignore = {"Default", "Custom", ".", ".."};

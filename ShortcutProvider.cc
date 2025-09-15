@@ -13,7 +13,6 @@
 #include <objbase.h>
 #include <objidl.h>
 #include <shlguid.h>
-#include <cpp_util.h>
 
 HRESULT ShortcutProvider::Create(LPSTR pszTargetfile, LPSTR pszTargetargs,
                                 LPSTR pszLinkfile, LPSTR pszDescription,

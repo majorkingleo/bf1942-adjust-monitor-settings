@@ -7,7 +7,7 @@
 #include "common.h"
 #include <cppdir.h>
 #include <xml.h>
-#include <cpputils.h>
+#include <stderr_exception.h>
 #include <string_utils.h>
 
 using namespace Tools;
@@ -18,7 +18,7 @@ std::string get_user_profile( const std::string & bf_base_folder )
     const std::string profile_file = CppDir::concat_dir( bf_base_folder, R"(Mods\bf1942\Settings\Profile.con)");
     if( !XML::read_file( profile_file,
                          content ) ) {
-        throw REPORT_EXCEPTION( format( "cannot open: '%s'", profile_file ) );
+        throw STDERR_EXCEPTION( format( "cannot open: '%s'", profile_file ) );
     }
 
     // the file looks like this:
@@ -32,7 +32,7 @@ std::string get_user_profile( const std::string & bf_base_folder )
             auto entries = split_simple( line );
 
             if( entries.size() < 2 ) {
-                throw REPORT_EXCEPTION( format( "Cannot parse line: '%s'", line ) );
+                throw STDERR_EXCEPTION( format( "Cannot parse line: '%s'", line ) );
             }
 
             std::string entry = strip(entries[1], " \"\t" );

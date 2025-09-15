@@ -49,6 +49,7 @@ m4/lt~obsolete.m4
 Makefile
 INSTALL
 adjust_monitor_settings.exe
+create_desktop_icons.exe
 
 # eclipse stuff
 .cproject

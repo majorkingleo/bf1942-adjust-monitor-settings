@@ -7,7 +7,7 @@
 #include "common.h"
 #include "ShortcutProvider.h"
 #include <cppdir.h>
-#include <cpp_utils.h>
+#include <stderr_exception.h>
 #include <windows.h>
 #include <shlobj.h>
 
@@ -19,7 +19,7 @@ static std::string get_desktop_directory_ansi()
     if (SHGetSpecialFolderPathA(HWND_DESKTOP, path, CSIDL_DESKTOP, FALSE))
         return path;
 
-    throw REPORT_EXCEPTION( "cannot find desktop path" );
+    throw STDERR_EXCEPTION( "cannot find desktop path" );
 }
 
 static void create_icon( const std::string & bf_bf1942_exe,
@@ -56,7 +56,7 @@ int main()
 		}
 
 		if( !f_bf1942_exe.is_valid() ) {
-			throw REPORT_EXCEPTION( "Cannot find user setting location.\n"
+			throw STDERR_EXCEPTION( "Cannot find user setting location.\n"
 					"Please run this program in battlefield folder or profile settings folder");
 		}
 
