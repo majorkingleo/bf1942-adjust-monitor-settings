@@ -54,4 +54,5 @@ adjust_monitor_settings.exe
 .cproject
 .project
 .settings/
-
+.deps
+.dirstamp

@@ -32,7 +32,7 @@ AC_DEFUN([LD_FLAGS_CHECK],
 ])
 
 
-AC_INIT(adjust_monitor_settings, 0.1)
+AC_INIT(adjust_monitor_settings, 0.2)
 AM_INIT_AUTOMAKE([subdir-objects -Wall])
 
 

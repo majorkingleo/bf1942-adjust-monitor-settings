@@ -1,0 +1,35 @@
+commit e1cd8e98f3a80e23e99c3d31d586eb1a2ede4dd9
+Author: Martin Oberzalek <kingleo@gmx.at>
+Date:   Sat Oct 14 22:14:21 2023 +0200
+
+    create deskopt icons utility built
+
+commit 7e642d0f3faf4a0604f0e60147f30f4078ed075a
+Author: unknown <kingleo@gmx.at>
+Date:   Tue Nov 1 12:03:54 2022 +0100
+
+    compilation test after import
+
+commit f2d9c41fac50359b2330a392a318a77ae56ad3a1
+Author: unknown <martin.oberzalek@ssi-schaefer.com>
+Date:   Tue Nov 1 11:56:39 2022 +0100
+
+    Importet latest cpputils
+
+commit 647d2eba819608b768730154600589efb12b7a59
+Author: unknown <martin.oberzalek@ssi-schaefer.com>
+Date:   Tue Nov 1 11:56:04 2022 +0100
+
+    removed invalid dir
+
+commit d760b58dc5a9a88990c513a38ece75a20aae2a74
+Author: unknown <martin.oberzalek@ssi-schaefer.com>
+Date:   Tue Nov 1 11:52:28 2022 +0100
+
+    Initial import
+
+commit e2f481acdb6437a0d80aaf186f5fa4d16622b5de
+Author: Martin Oberzalek <76852670+majorkingleo@users.noreply.github.com>
+Date:   Tue Nov 1 11:42:51 2022 +0100
+
+    Initial commit
