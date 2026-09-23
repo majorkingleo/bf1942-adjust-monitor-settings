@@ -1,0 +1,104 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "make",
+            "detail": "Build the project with GNU make in a Cygwin shell",
+            "type": "shell",
+            "command": "cd '${workspaceFolder}' && make",
+            "options": {
+                "shell": {
+                    "executable": "C:\\cygwin64\\bin\\bash.exe",
+                    "args": [
+                        "-lc"
+                    ]
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "make clean",
+            "detail": "Remove build output",
+            "type": "shell",
+            "command": "cd '${workspaceFolder}' && make clean",
+            "options": {
+                "shell": {
+                    "executable": "C:\\cygwin64\\bin\\bash.exe",
+                    "args": [
+                        "-lc"
+                    ]
+                }
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "reconfigure",
+            "detail": "Regenerate the build system and re-run configure (reconfigure.sh)",
+            "type": "shell",
+            "command": "cd '${workspaceFolder}' && ./reconfigure.sh",
+            "options": {
+                "shell": {
+                    "executable": "C:\\cygwin64\\bin\\bash.exe",
+                    "args": [
+                        "-lc"
+                    ]
+                }
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "make -j",
+            "detail": "Parallel build using all available cores",
+            "type": "shell",
+            "command": "cd '${workspaceFolder}' && make -j\"$(nproc)\"",
+            "options": {
+                "shell": {
+                    "executable": "C:\\cygwin64\\bin\\bash.exe",
+                    "args": [
+                        "-lc"
+                    ]
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "rebuild",
+            "detail": "Clean then build",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "make clean",
+                "make"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        }
+    ]
+}

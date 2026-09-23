@@ -58,3 +58,9 @@ list_monitor_resolutions.exe
 .settings/
 .deps
 .dirstamp
+
+# object files
+*.o
+
+# shadow deploy target for the new rfa tools (see PLAN_rfa_tools.md)
+/bin/new/

@@ -1,3 +1,21 @@
+commit be9605018eae04f435669bbeea130e348549da35
+Author: Martin Oberzalek <kingleo@gmx.at>
+Date:   Mon Sep 15 23:14:13 2025 +0200
+
+    added prog list_monitor_resolutions
+
+commit ced0bf44e4f1f61899c4fd829e9a9b7df01778ac
+Author: Martin Oberzalek <kingleo@gmx.at>
+Date:   Mon Sep 15 22:43:20 2025 +0200
+
+    updated to newest cpputils
+
+commit 4a1dff7bb16df3f427bf58a2bbe59b52956d35da
+Author: Martin Oberzalek <kingleo@gmx.at>
+Date:   Mon Sep 15 22:31:47 2025 +0200
+
+    checked in new to ignore some temp files
+
 commit e1cd8e98f3a80e23e99c3d31d586eb1a2ede4dd9
 Author: Martin Oberzalek <kingleo@gmx.at>
 Date:   Sat Oct 14 22:14:21 2023 +0200
