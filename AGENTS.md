@@ -25,6 +25,11 @@ C:\cygwin64\bin\bash.exe -lc "cd '<workspace>' && make"
 * `make check` builds and runs the test suite (VS Code task `make check`). Harness is in
   `testcommon/`; subjects live in `src_test_rfa/` as `test_<subject>.{h,cc}` pairs and are
   registered in `src_test_rfa/test_rfa.cc`. Run one case with `test_rfa.exe -t <idx>`.
+* `tests/data/` holds the real fixtures; `tests/data/golden/` holds a small source tree plus
+  the archives `bin\rfaPack.orig.exe` produced from it — the writer's oracle, compared
+  byte-for-byte in store mode and semantically in compress mode. Regenerate with
+  `tools/rfa_golden_archives.py`. Tests never launch the oracle binaries themselves:
+  `std::system` goes through cmd.exe, which mangles both forward-slash and absolute paths.
 * `AM_CPPFLAGS` contains `-std=c++20`, which is invalid for a C translation unit.
   Any `.c` file added to this tree needs its own per-target `CPPFLAGS`, as
   `third_party/minilzo/libminilzo.a` does.
@@ -56,8 +61,15 @@ Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, an
   * otherwise → the first u32 at `dataOffset` is a **chunk count**, followed by 12-byte
     chunk descriptors, then the concatenated per-chunk LZO1X payloads.
   Do not assume a constant `tag == 1` header — that mistake is invisible on small files.
+* A chunk is an **LZO1X stream iff `compressedSize != uncompressedSize`** — inequality,
+  not less-than. LZO1X often *expands* small or incompressible input (1 byte → 5), and a
+  less-than test misreads those chunks as verbatim, returning compressed bytes as content.
 * `version` is `0` or `1` and does **not** select the payload layout; both occur, and
-  235 raw entries live in version-1 archives.
+  235 raw entries live in version-1 archives. `rfaPack.exe` writes 0 without `-Compress`
+  and 1 with it. A version-1 archive containing a raw non-empty entry makes the original
+  `rfaUnpack.exe` crash, so never write that combination.
+* Entry order is each directory's own files (sorted) then its subdirectories (sorted),
+  recursively — **not** ASCII-ascending full paths.
 * Entry `nameLen` is the exact name length — there is **no** NUL terminator in the stream.
 * The entry `flags` field is **per-entry**, not an archive constant. Treat it as opaque and
   preserve it on in-place updates.

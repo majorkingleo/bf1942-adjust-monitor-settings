@@ -17,6 +17,7 @@
 #include "test_lzo.h"
 #include "test_rfa_archive.h"
 #include "test_rfa_format.h"
+#include "test_rfa_writer.h"
 #include "test_testcommon.h"
 
 #include "TestRunner.h"
@@ -83,6 +84,19 @@ int main( int argc, char ** argv )
 	test_cases.push_back( test_archive_detects_garbage() );
 	test_cases.push_back( test_archive_detects_empty_file() );
 	test_cases.push_back( test_archive_unreadable_path_fails_cleanly() );
+
+	// --- writer -----------------------------------------------------------
+	test_cases.push_back( test_writer_collect_files_names_them_base_slash_relative() );
+	test_cases.push_back( test_writer_store_policy_writes_version_0_raw_entries() );
+	test_cases.push_back( test_writer_compress_policy_writes_version_1_chunked_entries() );
+	test_cases.push_back( test_writer_round_trips_a_tree_through_our_reader() );
+	test_cases.push_back( test_writer_multi_chunk_entry_round_trips() );
+	test_cases.push_back( test_writer_empty_file_round_trips_in_both_policies() );
+	test_cases.push_back( test_writer_orders_entries_like_the_oracle() );
+	test_cases.push_back( test_writer_is_deterministic_across_thread_counts() );
+	test_cases.push_back( test_writer_missing_source_leaves_no_archive() );
+	test_cases.push_back( test_writer_matches_the_golden_store_archive_byte_for_byte() );
+	test_cases.push_back( test_writer_compress_archive_is_interchangeable_with_the_oracle() );
 
 	return run_testcases( argc, argv, "rfa", test_cases );
 }

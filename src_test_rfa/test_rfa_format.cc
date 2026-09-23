@@ -112,15 +112,19 @@ TestCasePtr test_format_header_size_is_zero_for_raw_and_empty()
 
 TestCasePtr test_format_chunk_is_compressed_rule()
 {
+	// Equality, not less-than. A chunk that LZO expanded is still an LZO stream: treating
+	// it as verbatim silently returns compressed bytes as if they were file content.
 	return std::make_shared<TestCaseFuncNoInp>(
 		"format_chunk_is_compressed_rule", true, []() {
-			const Chunk shrunk{ 100, 200, 0 };      // compressed
-			const Chunk grown{ 200, 100, 0 };       // incompressible, stored as-is
-			const Chunk equal{ 100, 100, 0 };       // stored verbatim
+			const Chunk shrunk{ 100, 200, 0 };      // compressed well
+			const Chunk grown{ 200, 100, 0 };       // LZO made it bigger - still a stream
+			const Chunk tiny{ 5, 1, 0 };            // a 1-byte file becomes 5 bytes
+			const Chunk verbatim{ 100, 100, 0 };    // stored as-is
 
 			return shrunk.is_compressed()
-			    && !grown.is_compressed()           // compressedSize may exceed the input
-			    && !equal.is_compressed();
+			    && grown.is_compressed()
+			    && tiny.is_compressed()
+			    && !verbatim.is_compressed();
 		} );
 }
 

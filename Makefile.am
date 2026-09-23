@@ -123,10 +123,13 @@ noinst_LIBRARIES += rfa/librfa.a
 
 rfa_librfa_a_SOURCES = \
 		rfa/RfaFormat.h \
+		rfa/RfaStamp.h \
 		rfa/LzoCodec.h \
 		rfa/LzoCodec.cc \
 		rfa/RfaArchive.h \
-		rfa/RfaArchive.cc
+		rfa/RfaArchive.cc \
+		rfa/RfaWriter.h \
+		rfa/RfaWriter.cc
 
 # vendored third-party LZO1X codec (see third_party/minilzo/README.md).
 # It gets its own CPPFLAGS because AM_CPPFLAGS carries -std=c++20, which is not a
@@ -159,6 +162,8 @@ test_rfa_SOURCES = \
 		src_test_rfa/test_rfa_archive.cc \
 		src_test_rfa/test_rfa_format.h \
 		src_test_rfa/test_rfa_format.cc \
+		src_test_rfa/test_rfa_writer.h \
+		src_test_rfa/test_rfa_writer.cc \
 		src_test_rfa/test_testcommon.h \
 		src_test_rfa/test_testcommon.cc \
 		tools_config.h

@@ -1,3 +1,59 @@
+commit ada2de5b62bb178a195a3b06f0eef142891a01e2
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Wed Sep 23 13:40:54 2026 +0200
+
+    Phase 2 (part 1): rfa container model, LZO wrapper and archive reader
+    
+    Implements steps 1-3 of Phase 2 in PLAN_rfa_tools.md. 48/48 testcases pass.
+    
+    * rfa/RfaFormat.h - the container model from the 814-archive sweep: CHUNK_SIZE,
+      BLOCK_HEADER_SIZE, CHUNK_DESCRIPTOR_SIZE, PayloadVariant, Chunk, Entry and
+      chunk_count_for(). Header-only and I/O-free, so the arithmetic is testable in
+      isolation from any file handling.
+    * rfa/LzoCodec.h/.cc - miniLZO wrapper. An instance owns the compressor work
+      buffer, so one per thread; decompress() is static and stateless, which means
+      concurrent decompression needs no locking. compress() lets callers fall back to
+      storing a chunk verbatim, because a chunk's compressedSize may legitimately
+      exceed its uncompressedSize.
+    * rfa/RfaArchive.h/.cc - reader for BOTH payload variants. Validates every
+      invariant from the format model and collects complaints in problems() rather
+      than failing hard. Parsing reads the table and the chunk descriptor tables but
+      never a payload, so a 741 MB archive opens cheaply. PayloadReader holds its own
+      file handle, which is what makes per-entry parallel extraction safe by
+      construction rather than by convention.
+    * src_test_rfa/test_rfa_format.{h,cc} - the model arithmetic, including the real
+      fixture numbers rather than only round figures.
+    * src_test_rfa/test_rfa_archive.{h,cc} - the reader against the fixtures.
+    * src_test_rfa/test_lzo.{h,cc} - added LzoCodec wrapper cases.
+    
+    Coverage: all 259 entries across the four fixtures decompress to exactly their
+    declared size, including 92 multi-chunk entries up to 22 chunks / 699,192 bytes,
+    and the raw headerless variant. Corrupt input is rejected without crashing:
+    truncated, garbage, empty, and payload-corrupted archives.
+    
+    Two gaps are recorded rather than papered over:
+    * no fixture contains an Empty entry, so that variant is still untested; the
+      writer will synthesise one.
+    * the reader is self-consistent but NOT yet verified against the oracle - Phase 3
+      compares against bin/rfaUnpack.orig.exe. The exception is
+      archive_conquest_con_matches_phase0_ground_truth, which pins a real 373-byte
+      file against bytes the original tool wrote to disk in Phase 0.
+    
+    RfaWriter, -u update and the multithreaded worker pool remain for part 2.
+
+commit 0a4855e2e4b816dd00164becada8633bb432913d
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Wed Sep 23 13:40:54 2026 +0200
+
+    stop tracking python bytecode
+    
+    tools/*.py import each other (rfa_names and rfa_golden import rfa_probe, and
+    rfa_golden imports rfa_oracle), so running any of them writes tools/__pycache__/
+    containing .pyc files. Two of those had been committed.
+    
+    Untracked them - the files stay on disk - and added ignore rules for
+    __pycache__/, *.pyc, *.pyo and .pytest_cache/.
+
 commit ffd76f1031c1ced868fc7740b8f4bd8e523fbfea
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Wed Sep 23 13:34:39 2026 +0200

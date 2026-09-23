@@ -72,6 +72,7 @@ test_rfa.trs
 # scratch files written by TestCaseFuncOneFile
 testcommon/.*.txt
 .*.txt
+.*.txt.work/
 
 # autoconf backup files
 *~

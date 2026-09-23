@@ -46,8 +46,8 @@ distinct `flags` values for very little repository weight.
 
 > ⚠️ Every fixture here is **single-chunk** (all files are far below 32 KiB). The
 > multi-chunk path is exercised by `fh/Battle_Of_Pavlov-1942.rfa` — but only a handful
-> of its 251 entries exceed 32 KiB. Generate a synthetic ≥ 100 KiB multi-chunk fixture in
-> Phase 2 as well; do not rely on this directory alone for chunk coverage.
+> of its 251 entries exceed 32 KiB. The writer tests build their own ≥ 100 KiB multi-chunk
+> inputs, so do not rely on this directory alone for chunk coverage.
 
 ## Notes / caveats
 
@@ -58,8 +58,23 @@ distinct `flags` values for very little repository weight.
 * `flags` is **per-entry and not an archive constant** — observed values so far:
   `0xFFFFFFFF`, `0x7C001CD8`, `0x77FCB6DE`, `0x00000000`. Treat it as opaque and preserve it on
   in-place `-u` updates.
-* These are input fixtures only. Expected outputs are *not* stored here — the tests derive them
-  by running the oracle binaries in `bin\` (`rfaPack.exe` / `rfaUnpack.exe`, currently the
-  original vendor builds) instead, so the expectations cannot silently drift from the reference
-  implementation. When the new builds are promoted, the originals are renamed to
-  `*.orig.exe` and become the oracle.
+* These are input fixtures only. Expected outputs live in `tests/data/golden/`, which holds
+  a small source tree plus the archives the **original** `rfaPack.exe` produced from it, and
+  `MANIFEST.txt` with their hashes.
+
+## `golden/` — the oracle's own output
+
+`golden/tree/` is a five-file tree (including a zero-byte file and a 200,000-byte one, so it
+spans multi-chunk) and `golden/oracle-store.rfa` / `golden/oracle-compress.rfa` are the
+archives `bin\rfaPack.orig.exe` wrote from it, with and without `-Compress`.
+
+They are committed rather than generated per run because `std::system` goes through cmd.exe,
+which reads forward slashes as switches and resolves relative paths against its own working
+directory — neither `bin/rfaPack.orig.exe` nor an absolute path could be launched from inside
+a test. Committing them also makes the suite hermetic and fast, and it means the expectations
+are a fixed artefact that cannot drift with the oracle.
+
+Regenerate with `tools/rfa_golden_archives.py` (it re-runs the oracle and rewrites
+`MANIFEST.txt`). `writer_matches_the_golden_store_archive_byte_for_byte` requires the store
+archive to match **byte for byte**; the compress archive is compared semantically instead,
+because RFA Pack 1.7's 2003-era LZO emits different-but-equivalent streams to miniLZO 2.10.

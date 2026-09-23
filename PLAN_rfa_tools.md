@@ -260,43 +260,57 @@ runner's own failure paths were verified by hand (`-t 99` → exit 1, `--bogus` 
 * `testcommon/` is standard-library only; upstream pulls `ColoredOutput`/`Arg`/`OutDebug`
   from `cpputils/io`, which this project does not build. Colour can be added later.
 
-### Phase 2 — core library `rfa/` — ⏳ IN PROGRESS
+### Phase 2 — core library `rfa/` — ✅ DONE (except `-u`)
 
 1. ✅ `RfaFormat.h` — the container model: `CHUNK_SIZE`, `BLOCK_HEADER_SIZE`,
    `CHUNK_DESCRIPTOR_SIZE`, `PayloadVariant`, `Chunk`, `Entry`, `chunk_count_for()`.
    Header-only, no I/O, so the arithmetic is testable in isolation.
 2. ✅ `LzoCodec` — miniLZO wrapper. One instance per thread owns the work buffer;
    `decompress()` is static and stateless, so concurrent decompression needs no locking.
-   `compress()` deliberately reports the size so callers can fall back to storing a chunk
-   verbatim, since a chunk's `compressedSize` may exceed its `uncompressedSize`.
+   `compress()` reports the size so callers can see what happened.
 3. ✅ `RfaArchive` + `PayloadReader` — reader for **both payload variants**. Validates
    every invariant in §2.2 and collects complaints in `problems()` instead of failing
    hard. Parsing reads the table and the chunk descriptor tables but **never a payload**,
    so a 741 MB archive opens cheaply. `PayloadReader` holds its own file handle, which is
    what makes per-entry parallel extraction safe by construction.
-4. ⏳ `RfaWriter` — pack a directory tree, `-u` update, deterministic entry ordering and
-   layout. **Not started.**
-5. ⏳ Parallelism — worker pool sized by `std::thread::hardware_concurrency()`, work unit
-   = one 32 KiB chunk. **Not started** (the reader is already structured for it).
+4. ✅ `RfaWriter` — packs a tree into either policy, reproducing `rfaPack.exe`'s layout:
+   version 0 + raw entries without `-Compress`, version 1 + 32 KiB chunked entries with it,
+   data at offset 156 behind the generated stamp, entries in the oracle's walk order. A
+   failed pack removes its partial output rather than leaving a half archive.
+   ⏳ **`-u` in-place update is NOT implemented** — it needs the probe work in §7.
+5. ✅ Parallelism — chunk compression across a pool sized by
+   `std::thread::hardware_concurrency()` (overridable), one 32 KiB chunk per work item.
+   Results are indexed by chunk and never appended in completion order, so the output
+   cannot depend on scheduling. Verified byte-identical at 1 and 8 threads.
 
-**Exit gate progress:**
+**Exit gate:**
 
 | Item | Status |
 |---|---|
-| table round-trip (parse → serialize → parse) | ⏳ needs `RfaWriter` |
-| variant coverage: raw / single-chunk / multi-chunk | ✅ raw (`Peenemunde_001.rfa`), single-chunk (`salerno_001.rfa`), multi-chunk (`Battle_Of_Pavlov-1942.rfa`: 92 entries, largest 22 chunks / 699,192 bytes) |
-| variant coverage: empty entry | ❌ **no fixture has one** — needs `RfaWriter` to synthesise it |
+| table round-trip (parse → serialize → parse) | ✅ subsumed by the store byte-identity test |
+| variant coverage: raw | ✅ store-mode archives; `Peenemunde_001.rfa` |
+| variant coverage: single-chunk / multi-chunk | ✅ `salerno_001.rfa`; `Battle_Of_Pavlov-1942.rfa` (92 multi-chunk entries, largest 22 chunks) and a synthetic 7-chunk file |
+| variant coverage: empty entry | ✅ all three encodings round-trip, including the oracle's `-Compress` form |
 | LZO round-trip incl. `CHUNK_SIZE ± 1` and multiples | ✅ |
-| corrupt input fails cleanly, never crashes | ✅ truncated / garbage / empty file / corrupted payload |
-| every fixture entry decompresses to its declared size | ✅ all 259 entries across the 4 fixtures |
-| determinism: 1 thread vs 8 threads → identical bytes | ⏳ needs `RfaWriter` |
-| sweep: validate every fixture | ✅ `problems()` empty for all four, matching `tools/rfa_probe.py` |
+| corrupt input fails cleanly, never crashes | ✅ truncated / garbage / empty / payload-corrupted |
+| every fixture entry decompresses to its declared size | ✅ 259 entries across the 4 fixtures |
+| determinism: 1 vs 8 threads → identical bytes | ✅ |
+| **store-mode output byte-identical to `rfaPack.exe`** | ✅ **PASSES** — one comparison pins the stamp, first data offset (156), reserved field, version, table layout and entry order at once |
+| compress-mode output vs the oracle | ⚠️ interchangeable, **not** byte-identical — see below |
 
-Coverage note: 48 testcases pass, but the reader has **not yet been checked against the
-oracle** — Phase 3's comparison against `bin/rfaUnpack.orig.exe` is what proves the
-extracted bytes are the *right* bytes, not merely self-consistent. The one exception is
-`archive_conquest_con_matches_phase0_ground_truth`, which pins a real 373-byte file
-against bytes the original tool wrote to disk in Phase 0.
+**Compress-mode output is not byte-identical, and cannot be.** RFA Pack 1.7 embeds a
+2003-era LZO whose `lzo1x_1_compress` picks different — equally valid — matches than the
+miniLZO 2.10 we vendor, so the streams differ in length while decompressing to identical
+bytes. (Its empty-file stream is 4 bytes where miniLZO's is 3, which is also why
+`lzo1x_decompress_safe` rejects it with `LZO_E_INPUT_NOT_CONSUMED`.)
+`writer_compress_archive_is_interchangeable_with_the_oracle` therefore asserts what
+actually matters: same version, entry order, names, uncompressed sizes and opaque fields,
+and payload-for-payload equality after decompression. Byte-matching would mean vendoring
+the oracle's LZO version, which buys nothing.
+
+**Not done in this phase:** `-u` in-place update, and a smoke test on a 741 MB archive.
+Peak writer memory is bounded by the largest single file (source plus its encoded block),
+not by the archive, because files are encoded and appended one at a time.
 
 ### Phase 3 — CLI tools
 1. `rfaUnpack.cc` / `rfaPack.cc` reproducing §2.4 exactly — **including the chatter strings**,
@@ -416,10 +430,16 @@ in this repo, since `bf_pablov_mod` does not have one.
 ## 9. Immediate next actions
 
 1. ✅ Back up the oracle binaries; add `tools/rfa_oracle.py` — done, Phase 0 complete.
-2. ▶ **Next: Phase 1** — `testcommon/` harness, `src_test_rfa/` skeletons, `check_PROGRAMS`/
-   `TESTS` wiring in `Makefile.am`, vendor miniLZO, then `./reconfigure.sh && make check`.
-3. Phase 2 — `RfaArchive` + `LzoCodec` with the variant/chunk tests listed above.
-4. Phase 3 — both CLIs, then the oracle-comparison suite driven by `tools/rfa_golden.py`.
+2. ✅ Phase 1 — `testcommon/` harness, `src_test_rfa/`, `check_PROGRAMS`/`TESTS` wiring,
+   vendored miniLZO. Done.
+3. ✅ Phase 2 — `RfaArchive`, `LzoCodec`, `RfaWriter` with the variant/chunk/writer tests
+   and the oracle comparison. Done except `-u`.
+4. ▶ **Next: Phase 3** — both CLIs, then the oracle-comparison suite driven by
+   `tools/rfa_golden.py`.
+
+> Before writing `-u`: the original's update semantics are still **unknown**, and the CLI
+> reference records nothing about the mode. Probe it first, with the controlled-archive
+> method that cracked the codec — do not guess.
 
 ---
 
@@ -481,3 +501,33 @@ itself on day one.
 * `CHUNK_SIZE`, the 12-byte descriptor arithmetic and the two payload variants are
   documented in §2.2 and need to be implemented in `RfaArchive`/`RfaWriter`.
 * `test_rfa_format`, `test_rfa_archive`, `test_rfa_cli` still to be created.
+
+### Phase 2 — DONE except `-u` (2026-09-23)
+
+Delivered: `rfa/RfaFormat.h`, `rfa/RfaStamp.h` (generated by `tools/rfa_stamp_gen.py`),
+`rfa/LzoCodec.{h,cc}`, `rfa/RfaArchive.{h,cc}`, `rfa/RfaWriter.{h,cc}`,
+`src_test_rfa/test_rfa_format|archive|lzo|writer.{h,cc}`, `tests/data/golden/` (tree +
+`oracle-store.rfa` + `oracle-compress.rfa` + `MANIFEST.txt`),
+`tools/rfa_golden_archives.py`. `make check` → **PASS, 59/59 testcases**, zero diagnostics.
+
+| # | Finding | Impact |
+|---|---|---|
+| 15 | A chunk is LZO1X **iff `compressedSize != uncompressedSize`** — inequality, not less-than | The reader tested `<`, so every LZO-*expanded* chunk (1 byte → 5, incompressible 32 KiB) was treated as verbatim and returned compressed bytes as file content. Size-only self-consistency could not see it — the oracle comparison caught it. Fixed in `Chunk::is_compressed()`; the format skill doc had stated the wrong rule and is corrected. |
+| 16 | `rfaPack.exe` does **not** sort entries by full path | Order is each directory's own files (sorted) then its subdirectories (sorted), recursively. A full-path sort agrees on flat trees and diverges on nested ones; proven with a 2-level/3-sibling tree. The `sort_entries` option was removed rather than kept as a trap. |
+| 17 | Compress-mode output **cannot** be byte-identical to the oracle | RFA Pack 1.7's 2003-era LZO picks different but equally valid matches than miniLZO 2.10. Store mode **is** byte-identical — the stronger result, since one comparison pins the stamp, first data offset, reserved field, version, table layout and entry order together. Compress mode is asserted semantically instead. |
+| 18 | The oracle's `-Compress` empty entry is **not** a valid LZO1X stream | miniLZO emits 3 bytes where the 2003-era LZO emitted 4, so `lzo1x_decompress_safe` fails with `LZO_E_INPUT_NOT_CONSUMED`. Three encodings exist for "zero bytes"; readers must short-circuit on `uncompressedSize == 0` rather than consult the codec. |
+| 19 | Driving the oracle from inside a C++ test is not viable | `std::system` goes through cmd.exe, which reads `/` as a switch and resolves relative paths against its own cwd — `bin/rfaPack.orig.exe` failed, and so did absolute paths. Replaced by committed golden archives produced once by `tools/rfa_golden_archives.py`, which also makes the tests hermetic and fast. |
+
+Small fixtures hid findings 1 and 15 both: a single-chunk file cannot reveal a
+constant-`tag` header, and a compressible file cannot reveal an expanded chunk. The
+lesson repeated twice is that **self-consistency is not correctness** — only the oracle
+comparison is, and it should have been written before the writer tests.
+
+### Carried into Phase 3
+
+* The CLI contract is in `.github/skills/rfa-unpack/references/rfaunpack-cli.md` and
+  `tests/golden/oracle-cli.json`; reproduce the chatter strings, not just the effects.
+* The originals' **exit codes are not a success signal** (findings 7) and their stdout
+  **line order is unstable under redirection** (finding 9) — compare message presence.
+* Fixing the broken `-f` is a deliberate divergence to decide explicitly (Phase 0 note).
+* `-u` semantics still need probing before implementation.

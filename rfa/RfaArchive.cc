@@ -241,19 +241,19 @@ bool RfaArchive::classify_entry( std::ifstream & file, Entry & entry )
 
 	// Variant selection is purely structural. `version` is NOT a discriminator: 235 raw
 	// entries live inside version-1 archives.
-	if( entry.uncompressed_size == 0 ) {
-		entry.variant = PayloadVariant::Empty;
-
-		if( entry.stored_size != EMPTY_STORED_SIZE ) {
-			problems_.push_back( label + ": empty entry has storedSize "
-			                   + std::to_string( entry.stored_size ) + ", expected "
-			                   + std::to_string( EMPTY_STORED_SIZE ) );
-		}
+	// "Nothing to expand" has three encodings, all seen in real archives:
+	//   stored == unc == 0              rfaPack.exe without -Compress
+	//   stored == 4, unc == 0           shipped DICE archives
+	//   chunked, chunkCount 1, csize 4  rfaPack.exe -Compress
+	// The first is indistinguishable from a genuinely empty stored entry, hence the order:
+	// a stored==unc entry is simply raw, and only the DICE form becomes Empty.
+	if( entry.stored_size == entry.uncompressed_size ) {
+		entry.variant = PayloadVariant::Raw;
 		return true;
 	}
 
-	if( entry.stored_size == entry.uncompressed_size ) {
-		entry.variant = PayloadVariant::Raw;
+	if( entry.uncompressed_size == 0 && entry.stored_size == EMPTY_STORED_SIZE ) {
+		entry.variant = PayloadVariant::Empty;
 		return true;
 	}
 
@@ -393,6 +393,20 @@ PayloadReader::PayloadReader( const std::string & path )
 bool PayloadReader::read( const Entry & entry, std::vector<unsigned char> & out, std::string * error )
 {
 	out.clear();
+
+	// An entry with uncompressedSize == 0 yields nothing, whatever its data block says.
+	// Three encodings of "empty" exist in the wild - storedSize 0 (rfaPack.exe without
+	// -Compress), storedSize 4 (shipped DICE archives) and a chunked block holding a
+	// 4-byte payload (rfaPack.exe -Compress) - and the last one is NOT a valid LZO1X
+	// stream: lzo1x_decompress_safe rejects it with LZO_E_INPUT_NOT_CONSUMED because
+	// miniLZO emits 3 bytes where the 2003-era LZO emitted 4. Feeding it to the codec
+	// would fail on a real, game-shipped pattern, so short-circuit here.
+	//
+	// Nothing is skipped by doing so: with zero expected output there is no content to
+	// validate. classify_entry() has already bounds-checked the data block.
+	if( entry.uncompressed_size == 0 ) {
+		return true;
+	}
 
 	if( entry.variant == PayloadVariant::Empty ) {
 		return true;   // expands to nothing
