@@ -15,8 +15,11 @@
  *   - its meaning is unknown; it is byte-identical across archives from the same producer
  *     (rfaPack output and several shipped DICE archives), but the Forgotten Hope archive
  *     differs, so it is producer-specific rather than a universal constant
- *   - an in-place `-u` update must PRESERVE the target archive's existing bytes here, not
- *     overwrite them with the ones below
+ *   - an in-place `-u` update REPLACES it rather than preserving it, even when the target's
+ *     region is a different size: the FH archive's region is 4078 bytes at offset 8..4086,
+ *     and one `-u` normalised it to these 148 bytes at offset 156
+ *     (probed - PLAN_rfa_tools.md section 2.5). The earlier note here claimed the opposite;
+ *     it was wrong
  *
  * We write it because every observed archive lays its data out this way, making our
  * output structurally identical to the archives the game ships.

@@ -56,8 +56,9 @@ distinct `flags` values for very little repository weight.
   workspace, so treat all fixtures as **snapshots** and rely on the SHA-256 column to detect
   drift. Generate synthetic fixtures in tests for anything that must be byte-stable.
 * `flags` is **per-entry and not an archive constant** — observed values so far:
-  `0xFFFFFFFF`, `0x7C001CD8`, `0x77FCB6DE`, `0x00000000`. Treat it as opaque and preserve it on
-  in-place `-u` updates.
+  `0xFFFFFFFF`, `0x7C001CD8`, `0x77FCB6DE`, `0x00000000`. Treat it as opaque. Be aware that the
+  original `rfaPack.exe -u` **zeroes** this field rather than preserving it, so any archive it
+  has updated has lost the distinction.
 * These are input fixtures only. Expected outputs live in `tests/data/golden/`, which holds
   a small source tree plus the archives the **original** `rfaPack.exe` produced from it, and
   `MANIFEST.txt` with their hashes.

@@ -71,8 +71,12 @@ Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, an
 * Entry order is each directory's own files (sorted) then its subdirectories (sorted),
   recursively — **not** ASCII-ascending full paths.
 * Entry `nameLen` is the exact name length — there is **no** NUL terminator in the stream.
-* The entry `flags` field is **per-entry**, not an archive constant. Treat it as opaque and
-  preserve it on in-place updates.
+* The entry `flags` field is **per-entry**, not an archive constant. Treat it as opaque. Note
+  that the original `rfaPack.exe -u` **overwrites** it (and `reserved2`) with zeros — it does
+  not preserve them; see `PLAN_rfa_tools.md` §2.5 / D6.
+* `rfaPack.exe -u` is byte-for-byte a **fresh pack of the source tree using the target
+  archive's compression policy** (`-Compress` is ignored on `-u`), plus entries carried over
+  for names absent from the tree. It never deletes, and it exits 0 regardless.
 * The original `bin\rfaPack.exe` / `bin\rfaUnpack.exe` are the **compatibility oracle** for
   tests. Never overwrite them without keeping a `.orig.exe` backup.
 

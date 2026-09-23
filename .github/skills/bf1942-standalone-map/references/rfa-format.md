@@ -162,9 +162,15 @@ there is nothing to decompress and nothing to verify.
   held 246 entries with `0xFFFFFFFF` and 5 with `0x7C001CD8`. The `0x028A0220`
   quoted in older notes is a misreading of `0x7C001CD8`. Further values observed:
   `0x77FCB6DE`, `0x00000000`. `rfaPack.exe` writes `0` for new archives and the
-  engine still loads them — treat this field as opaque and **preserve the original
-  value on in-place `-u` updates**.
-* Entries are ordered **ascending by name** (ASCII).
+  engine still loads them — treat this field as opaque.
+  ⚠️ The original `rfaPack.exe -u` **zeroes this field on every entry** rather than
+  preserving it (probed with patched archives — see `PLAN_rfa_tools.md` §2.5), so any
+  archive it has updated has lost the distinction. Preserving the target's value is
+  therefore both safe and a deliberate divergence from the original.
+* Entries are ordered by **directory walk, not by full path**: each directory
+  contributes its own files (sorted by name) and only then its subdirectories (sorted
+  by name), recursively. A full-path sort agrees on flat archives and diverges on
+  nested ones, so it must not be used to reproduce an archive.
 * The directory terminator (u32 `0` after the last entry) is always zero, and the
   table runs to EOF.
 * Use `rfaPack.exe` (with `-Compress`) to build archives. `scripts/list_rfa.ps1`

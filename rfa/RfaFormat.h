@@ -130,7 +130,10 @@ struct Entry
 	std::uint32_t reserved1 = 0;
 	std::uint32_t reserved2 = 0;
 
-	/// Per-entry and opaque. Preserve it verbatim on in-place updates; the engine loads
+	/// Per-entry and opaque. The original `rfaPack.exe -u` overwrites it with zero rather than
+	/// preserving it (probed: PLAN_rfa_tools.md §2.5), so treat any meaning it carries as
+	/// unavailable in archives that have been updated by the original. We preserve the target's
+	/// value by default and rescind that with `--reset-entry-flags` (D6). The engine loads
 	/// archives whose value is 0 just as happily as 0xFFFFFFFF.
 	std::uint32_t flags = 0;
 

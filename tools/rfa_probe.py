@@ -42,7 +42,9 @@ class Chunk:
 
     @property
     def is_compressed(self) -> bool:
-        return self.compressed_size < self.uncompressed_size
+        # Inequality, NOT less-than: LZO1X expands incompressible input, and a
+        # compressedSize == uncompressedSize chunk is the verbatim case.
+        return self.compressed_size != self.uncompressed_size
 
 
 @dataclass

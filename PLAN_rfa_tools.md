@@ -92,10 +92,12 @@ Verified invariants:
 > fixtures contain — so it survived the original probe matrix, a ground-truth
 > extraction and two rounds of doc review. Only the 814-archive sweep exposed it.
 
-Entries are ordered **ascending by name** (ASCII). `flags` is per-entry; observed
-values are `0xFFFFFFFF`, `0x7C001CD8`, `0x77FCB6DE`, `0x00000000`, and `rfaPack.exe`
-writes `0` which the engine still loads — so treat it as opaque and preserve it on
-`-u` updates.
+Entries are ordered by **directory walk, not by full path**: each directory contributes its
+own files (sorted by name) and only then its subdirectories (sorted by name), recursively.
+An ASCII sort of full paths agrees on flat archives and diverges on nested ones — see
+finding 16. `flags` is per-entry; observed values are `0xFFFFFFFF`, `0x7C001CD8`,
+`0x77FCB6DE`, `0x00000000`, and `rfaPack.exe` writes `0` which the engine still loads — so
+treat it as opaque. The original's `-u` zeroes it rather than preserving it (§2.5).
 
 **Documentation corrections required** (the workspace's own reference docs were wrong):
 
@@ -156,7 +158,76 @@ rfaPack.exe   <sourceDir> <baseFolderName> <archive.rfa> [-u] [-Compress]
 * Failures are non-fatal; the run continues and overwrites silently.
 * `ExtractToPath` is a **parent** — internal paths are recreated verbatim beneath it.
 
-### 2.5 Existing project + test-suite template
+### 2.5 Update (`-u`) semantics — probed, not guessed
+
+Nothing in the vendor readme or in the CLI chatter explains `-u`, so it was probed with
+controlled archives and trees (`tools/rfa_probe_update.py`; 9 cases, each starting from a
+freshly packed baseline, each result re-extracted by the original to prove it stays
+readable). Every outcome is explained by **one** rule:
+
+> **`-u` behaves exactly like a fresh pack of the source tree, except that entries already in
+the target archive whose names are absent from the tree are carried over unchanged. The
+compression policy comes from the target archive, not from `-Compress`.**
+
+This was verified by byte comparison, not by inference: in all 9 cases the result is
+byte-identical to `rfaPack.exe <tree> <base> <out.rfa>` run fresh with the *target archive's*
+policy (store for a version-0 target, `-Compress` for a version-1 target). The only
+non-matching case is the deletion case, where the fresh pack of the reduced tree legitimately
+lacks the retained entry.
+
+| # | Question | Answer |
+|---|---|---|
+| 1 | Append a file absent from the archive? | Yes, inserted in canonical walk order |
+| 2 | Replace a file whose content changed but whose size did not? | Yes — content is compared, not size |
+| 3 | Replace a file that grew? | Yes; the following entries shift |
+| 4 | Delete an entry missing from the tree? | **No** — retained. Extraction returned 3 files for a 2-file tree, so this is proven by the oracle, not by inspection |
+| 5 | `-u` on an unchanged tree | Byte-identical no-op |
+| 6 | `-Compress` on `-u`, store target | **Ignored** — entries stay raw, `version` stays 0 |
+| 7 | Plain `-u`, compress target | **Ignored** — new entries come out compressed, `version` stays 1 |
+| 8 | `-u` with no existing archive | Creates it, exactly like a plain pack; no error |
+| 9 | Exit code | 0 in every case, including the deletion case |
+| 10 | Base name differs from the archive's own | **Every retained entry is renamed** — see below |
+| 11 | Reserved region on a real FH archive | **Replaced** with the standard 148-byte stamp at offset 156 — see below |
+
+Consequences for the reimplementation:
+
+* **`-u` needs no in-place update algorithm.** It is "fresh pack with the policy read from the
+  target, plus carried-over entries" — a far smaller and more testable feature than a patcher,
+  and it inherits the byte-identity we already have for fresh packs.
+* ⚠️ **The reserved region is NOT preserved.** On `tests/data/fh/Battle_Of_Pavlov-1942.rfa`
+  the region runs from offset 8 to **4086** (4,078 bytes, sha256 `131D3DBF...`) and the first
+  data block starts there. After one `-u` the region is the standard **148 bytes at offset
+  156** (sha256 `13BA8D23...`) — the archive was rebuilt on the packer's own layout and
+  ~3.9 KB of producer-specific bytes were discarded. The earlier claim that an in-place
+  update *must* preserve those bytes was wrong. Our self-produced archives cannot show this,
+  because there the region already is the constant, so "preserved" and "rewritten with our
+  stamp" are indistinguishable.
+* ⚠️ **Carried-over entries are RENAMED, and the rule is `newBase + "/" + storedName.substr(strlen(newBase) + 1)`.**
+  Verified by prediction and measurement on the FH archive, which stores
+  `bf1942/levels/...`:
+
+  | `base` argument | resulting name of the retained entry |
+  |---|---|
+  | `bf1942` (matches the archive) | `bf1942/levels/...` — unchanged, the documented case works |
+  | `menu` (shorter) | `menu/2/levels/...` — the stray `2` is the tail of the eaten `bf194` |
+  | `bf1942x` (longer) | `bf1942x/evels/...` — one character too many was consumed |
+
+  So `-u` silently renames every entry whenever the base name differs from the archive's own,
+  and nobody notices because the documented workflow always passes the matching name. We must
+  **not** reproduce this: we carry entries over verbatim, name included. Byte-identity with the
+  original then holds exactly where the original is correct (matching base) and diverges only
+  where it corrupts names. See D7.
+* ⚠️ **Opaque per-entry fields are NOT preserved.** Setting `flags` to `0xFFFFFFFF` and
+  `reserved2` to `0xDEADBEEF` on every entry and then running `-u` reset all of them to `0` —
+  the values a fresh pack writes. On the FH archive, whose entries carry `0xFFFFFFFF` and
+  `0x7C001CD8`, a single `-u` collapsed every one of them to `0`. This contradicts the advice
+  in `AGENTS.md` and the skills ("treat `flags` as opaque and preserve it on `-u`"). See D6.
+* `reserved1` is `1253856` = `0x001321E0` (the FH archive stores `0` here), and it survives only
+  because the packer always writes that constant — nothing is preserved on its behalf.
+* Table layout, confirmed by hex-dumping the oracle's own output: `u32 entryCount`, then per
+  entry `u32 nameLen + name + 24 bytes`, then a trailing `u32` that is zero.
+
+### 2.6 Existing project + test-suite template
 * This repo is autotools + vendored `cpputils/`, cross-compiled with mingw through Cygwin
   (`make` task already added to `.vscode/tasks.json`, verified working).
 * `cpputilstest` layout to mirror:
@@ -319,10 +390,11 @@ not by the archive, because files are encoded and appended one at a time.
    input and compare (a) extracted file trees byte-for-byte, (b) the archive name/size table,
    (c) exit code. (Extracted trees must match; archive bytes may legitimately differ.)
 3. New opt-in features (never change default behaviour):
+   * **`-u` update**, implemented per §2.5 as "fresh pack with the target's policy, plus
+     carried-over entries" — not as an in-place patcher. `--reset-entry-flags` reproduces the
+     original's clobbering; the default preserves the target's per-entry fields (D6).
    * **fix `-f`** — real name matching, so the broken original behaviour is strictly improved.
-   * **file replacement** — `-replace <internal/path>=<localFile>` (single or repeated),
-     and an in-place `rfaPack -u` that is transactional: write temp, fsync, atomic rename,
-     keep `.bak`.
+   * **file replacement** — `-replace <internal/path>=<localFile>` (single or repeated).
    * `--threads N` / `-j N`, `--quiet`, `--list`, `--version`.
    * verify-after-write (`--verify`) comparing re-read payloads.
 4. Decide explicit exit codes (0 ok, 1 error, 2 usage) and document them — the original
@@ -397,8 +469,8 @@ in this repo, since `bf_pablov_mod` does not have one.
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Codec misidentified | ~~high~~ **resolved** | LZO1X confirmed by reference tool + own experiments; Phase 2 tests pin it against both |
-| `-u` update semantics unknown | high | probe the original with controlled archives in Phase 0 (same method that cracked the codec); probe matrix is cheap |
-| Entry `flags`/`reserved` semantics unknown | medium | sample many archives; **preserve originals verbatim** on `-u` rather than inventing values |
+| `-u` update semantics unknown | ~~high~~ **resolved** | Probed with controlled archives (`tools/rfa_probe_update.py`): `-u` is a fresh pack with the target's policy plus carried-over entries. See §2.5 |
+| Entry `flags`/`reserved` semantics unknown | medium | Still unknown, but now known to be **clobbered** by the original on `-u`, so they cannot carry meaning the game depends on. Decision D6 |
 | Licensing of miniLZO (GPLv2+) | medium | compatible with this repo's GPLv3, but a clean-room `Lzo1x.cc` avoids the dependency (D4) |
 | Parallelism on huge archives (707 MB) | high | streaming per-file buffers, bounded worker queue, offset-ordered reads; never load whole archive |
 | Non-deterministic archive layout | medium | sort entries by name; assemble in the main thread; test 1 vs N threads for byte equality |
@@ -416,6 +488,9 @@ in this repo, since `bf_pablov_mod` does not have one.
 | D3 | Harness directory name | **`testcommon/`** — avoids ambiguity with the existing root `common.cc` / `common.h` |
 | D4 | Codec dependency | **Vendor miniLZO** into `third_party/minilzo/` (GPLv2+, compatible with this repo's GPLv3). **Not** under `cpputils/`, which is a submodule |
 | D5 | Deployment | **Shadow in `bin\new\` first** — validate against the real `.ps1` skills before touching the originals |
+| D6 | `flags`/`reserved2` on `-u` | **Preserve the target's existing values by default** (§2.5 finding: the original silently zeroes them). `--reset-entry-flags` reproduces the original byte-for-byte. Chosen because clobbering is destructive, the fields have never been shown to matter, and an archive stays readable by the original either way — the compatibility requirement is that the oracle can still read it, not that the bytes match |
+| D7 | Carried-over entry names on `-u` | **Carry over verbatim; do not reproduce the renaming bug** (§2.5 mapping). The bug renames files with no way to ask for it, only ever triggers when the base name differs, and cannot be what anyone wants. Byte-identity with the original is therefore claimed for the matching-base case only, which is the case the documented workflow uses |
+| D8 | Reserved region on `-u` | **Normalise to the standard 148-byte stamp at offset 156**, matching the original, so `-u` output stays byte-comparable with a fresh pack. The larger producer-specific region found in the FH archives is discarded — as the original does. `--keep-reserved-region` (opt-in) preserves it instead, for anyone updating an archive they do not want rewritten |
 
 ### Consequences folded into the plan
 * `Makefile.am` gains `check_PROGRAMS` + `TESTS` + `EXTRA_DIST`; `reconfigure.sh` is re-run once.
@@ -530,4 +605,31 @@ comparison is, and it should have been written before the writer tests.
 * The originals' **exit codes are not a success signal** (findings 7) and their stdout
   **line order is unstable under redirection** (finding 9) — compare message presence.
 * Fixing the broken `-f` is a deliberate divergence to decide explicitly (Phase 0 note).
-* `-u` semantics still need probing before implementation.
+* `-u` semantics were then probed — see the section below; §2.5 supersedes the earlier
+  "unknown" status.
+
+### Probe: `-u` update semantics — DONE (2026-09-23)
+
+Delivered: `tools/rfa_probe_update.py` (9 controlled cases, each re-extracted by the original
+to prove the result stays readable). Findings in §2.5; the four that change the design:
+
+| # | Finding | Impact |
+|---|---|---|
+| 20 | `-u` is byte-for-byte a **fresh pack of the tree using the target archive's compression policy**, plus carried-over entries for names absent from the tree | `-u` needs no in-place algorithm at all. It reuses the fresh-pack path we have already proven byte-identical to the oracle, so its risk profile collapses |
+| 21 | **`-Compress` is ignored during `-u`**, in both directions: `-u -Compress` leaves a store archive raw, and plain `-u` adds *compressed* entries to a compress archive. The flag is parsed and echoed as `UseCompression: N` but does not reach the archive | Compatibility requires reproducing this, however counter-intuitive; a naive `-u` honouring the flag would silently produce archives the original never writes |
+| 22 | **`-u` never deletes.** An entry missing from the tree is retained and still extracted | Any pruning feature must be explicit (`--prune`), never a side effect of `-u` |
+| 23 | **Opaque per-entry fields are clobbered.** Patching `flags` to `0xFFFFFFFF` and `reserved2` to `0xDEADBEEF` then running `-u` reset every entry to `0` — the fresh-pack defaults | Directly contradicts the "preserve `flags` on `-u`" advice in `AGENTS.md` and the skills, which is corrected. Decision D6 |
+| 24 | The entry table is `u32 count` + per-entry `u32 nameLen`/name/24 bytes + a trailing zero `u32`; `reserved1` is `0x001321E0` | Confirms the 24-byte field block our reader/writer already uses; recorded as a cross-check, not a change |
+| 25 | **`-u` RENAMES carried-over entries** as `newBase + "/" + storedName.substr(strlen(newBase) + 1)`. Predicted from the `menu/2/levels/...` anomaly and then confirmed: base `bf1942` leaves the FH names untouched, `menu` yields `menu/2/levels/...`, `bf1942x` yields `bf1942x/evels/...` | Silent, destructive, and invisible in the documented workflow because that workflow always passes the matching base name. Must not be reproduced — D7 |
+| 26 | **`-u` replaces a foreign reserved region.** The FH archive's region is 4,078 bytes at offset 8..4086; after one `-u` it is the standard 148 bytes at 156, so ~3.9 KB of producer-specific bytes were dropped and the layout normalised | Retires the "must preserve the target's reserved bytes" claim in `rfa/RfaStamp.h`. Also explains why the self-produced probes could not detect this: there the region already *is* the constant — D8 |
+
+Finding 25 is the one worth dwelling on: the anomaly was visible in the very first FH run as
+`menu/2/levels/...`, an obviously impossible path. It would have been easy to note it as noise,
+or to assume the tool "re-prefixes entries with the base" and implement that. Stating it as a
+prediction (`strip strlen(base)+1`) and then testing three base lengths is what turned it into a
+precise rule — and it is a rule we deliberately break.
+
+Worth noting how this was established: rule 20 was only visible because every case was
+compared against a *fresh pack*, and rule 23 only because the fields were patched to values
+the packer never produces. Reading the output and reasoning about what the code "must" do
+would have produced a wrong `-u` design in both cases — the same lesson as findings 15 and 16.

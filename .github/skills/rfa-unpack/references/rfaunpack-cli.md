@@ -97,7 +97,9 @@ Generic tools (7-Zip, .NET `DeflateStream`) cannot decompress these payloads.
 
 The entry `flags` field is **per-entry**, not an archive-level constant: a real FH
 archive contained 246 entries with `0xFFFFFFFF` and 5 with `0x7C001CD8`. Treat it
-as opaque and preserve it on `-u` updates.
+as opaque. Note that the original `rfaPack.exe -u` **overwrites `flags` and `reserved2` with
+zeros** rather than preserving them: an archive's non-zero `flags` values do not survive an
+update by the original tool.
 
 ## Tool locations
 

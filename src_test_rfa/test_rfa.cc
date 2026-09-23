@@ -8,7 +8,7 @@
  * Phase 1 registers the harness self-tests and the vendored miniLZO codec tests;
  * Phase 2 adds the container model and the reader driven by the real fixtures. Still to
  * come:
- *   test_rfa_archive   writer, -u update, determinism across thread counts
+ *   test_rfa_archive   writer, determinism across thread counts
  *   test_rfa_cli       CLI compatibility versus bin/*.orig.exe and tests/golden
  *
  * @author Copyright (c) 2026
