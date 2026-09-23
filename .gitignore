@@ -62,5 +62,19 @@ list_monitor_resolutions.exe
 # object files
 *.o
 
+# static libraries and test build output
+*.a
+test_rfa.exe
+test-suite.log
+test_rfa.log
+test_rfa.trs
+
+# scratch files written by TestCaseFuncOneFile
+testcommon/.*.txt
+.*.txt
+
+# autoconf backup files
+*~
+
 # shadow deploy target for the new rfa tools (see PLAN_rfa_tools.md)
 /bin/new/

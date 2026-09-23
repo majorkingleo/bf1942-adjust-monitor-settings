@@ -100,6 +100,62 @@ else
 AM_LDFLAGS +=
 endif
 
+# ---------------------------------------------------------------------------
+# Test suite (make check)
+#
+# The harness lives in testcommon/, not common/, because common.cc and common.h
+# already exist at the top level for the monitor tools. One program aggregates every
+# subject, following the majorkingleo/cpputilstest layout.
+#
+# NOTE: tests/data/ is intentionally NOT in EXTRA_DIST yet - the fixtures are 6 MB of
+# binaries, they are tracked in git, and nothing here runs `make dist`. Revisit if a
+# release tarball ever needs to be self-contained.
+# ---------------------------------------------------------------------------
+
+AM_CPPFLAGS += -I$(top_srcdir)/testcommon
+AM_CPPFLAGS += -I$(top_srcdir)/third_party/minilzo
+
+noinst_LIBRARIES += testcommon/libtestcommon.a
+
+# vendored third-party LZO1X codec (see third_party/minilzo/README.md).
+# It gets its own CPPFLAGS because AM_CPPFLAGS carries -std=c++20, which is not a
+# valid option for a C translation unit.
+noinst_LIBRARIES += third_party/minilzo/libminilzo.a
+
+third_party_minilzo_libminilzo_a_SOURCES = \
+		third_party/minilzo/minilzo.c \
+		third_party/minilzo/minilzo.h \
+		third_party/minilzo/lzoconf.h \
+		third_party/minilzo/lzodefs.h
+
+third_party_minilzo_libminilzo_a_CPPFLAGS = -I$(top_srcdir)/third_party/minilzo
+
+testcommon_libtestcommon_a_SOURCES = \
+		testcommon/TestUtils.h \
+		testcommon/TestUtils.cc \
+		testcommon/ColBuilder.h \
+		testcommon/ColBuilder.cc \
+		testcommon/TestRunner.h \
+		testcommon/TestRunner.cc
+
+check_PROGRAMS = test_rfa
+
+test_rfa_SOURCES = \
+		src_test_rfa/test_rfa.cc \
+		src_test_rfa/test_lzo.h \
+		src_test_rfa/test_lzo.cc \
+		src_test_rfa/test_testcommon.h \
+		src_test_rfa/test_testcommon.cc \
+		tools_config.h
+
+test_rfa_LDADD = \
+		testcommon/libtestcommon.a \
+		third_party/minilzo/libminilzo.a \
+		cpputils/cpputilsshared/libcpputilsshared.a \
+		cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a
+
+TESTS = test_rfa
+
 ACLOCAL_AMFLAGS = -I m4
 
 EXTRA_DIST = \

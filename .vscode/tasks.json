@@ -48,6 +48,32 @@
             }
         },
         {
+            "label": "make check",
+            "detail": "Build and run the test suite (tests/golden + tests/data fixtures)",
+            "type": "shell",
+            "command": "cd '${workspaceFolder}' && make check",
+            "options": {
+                "shell": {
+                    "executable": "C:\\cygwin64\\bin\\bash.exe",
+                    "args": [
+                        "-lc"
+                    ]
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
             "label": "reconfigure",
             "detail": "Regenerate the build system and re-run configure (reconfigure.sh)",
             "type": "shell",

@@ -232,16 +232,33 @@ check to every archive in the mod tree produced the corrected format model now i
 Findings that would have cost days inside Phase 2 were found in an afternoon of Phase 0.
 See §10 for the full list.
 
-### Phase 1 — test-suite scaffolding (cpputilstest pattern)
-1. Create `testcommon/` with `TestUtils`/`ColBuilder` in the cpputilstest style.
-2. Create `src_test_rfa/` with one `test_*.{cc,h}` pair per subject and a runner.
-3. Extend `Makefile.am`: `check_PROGRAMS`, `TESTS`, `TESTS_ENVIRONMENT`, plus `EXTRA_DIST`
-   for `tests/data`. Wire `make check`.
-4. Vendor miniLZO into `third_party/minilzo/` (decision D4) and add it to
-   `noinst_LIBRARIES`. **Not** under `cpputils/` — that is a submodule.
-5. Run `./reconfigure.sh` once so the generated `Makefile.in` knows the new targets.
+### Phase 1 — test-suite scaffolding (cpputilstest pattern) — ✅ DONE
+1. ✅ Created `testcommon/`: `TestUtils.h/.cc` (`TestCaseBase` + `TestCaseFuncBool`,
+   `TestCaseFuncEqual`, `TestCaseFuncNoInp`, `TestCaseFuncOneFile`) and
+   `ColBuilder.h/.cc` (the ASCII result table), API-compatible with cpputilstest.
+   Added `TestRunner.h/.cc` on top: the upstream harness repeats the run/report loop in
+   every `test_<component>.cc`; hoisting it means each program is a one-liner list.
+2. ⚠️ **Partial.** `src_test_rfa/` holds `test_rfa.cc` (the runner) plus two subjects with
+   real cases: `test_testcommon` (harness self-tests) and `test_lzo` (vendored codec).
+   `test_rfa_format`, `test_rfa_archive` and `test_rfa_cli` are deliberately deferred to
+   Phase 2/3 — creating empty stubs now would add files with no assertions.
+3. ✅ `Makefile.am`: `check_PROGRAMS = test_rfa`, `TESTS = test_rfa`, `noinst_LIBRARIES +=
+   testcommon/libtestcommon.a`.
+4. ✅ Vendored miniLZO 2.10 into `third_party/minilzo/` (unmodified, plus `COPYING`) with
+   a provenance README. It needs its own `CPPFLAGS` because `AM_CPPFLAGS` carries
+   `-std=c++20`, which is not valid for a C translation unit.
+5. ✅ `./reconfigure.sh` re-run so `Makefile.in` knows the new targets (this required
+   fixing the CRLF bug below).
 
-**Exit gate:** `make check` runs and reports a green (if empty) suite.
+**Exit gate: ✅ PASSED** — `make check` → `PASS: test_rfa.exe`, 21/21 testcases, and the
+runner's own failure paths were verified by hand (`-t 99` → exit 1, `--bogus` → exit 1,
+`--help` → exit 0).
+
+**Deviations, stated plainly:**
+* `tests/data/` is **not** in `EXTRA_DIST`. 6 MB of fixture binaries would land in any
+  `make dist` tarball and nothing in this workflow calls it. Noted in `Makefile.am`.
+* `testcommon/` is standard-library only; upstream pulls `ColoredOutput`/`Arg`/`OutDebug`
+  from `cpputils/io`, which this project does not build. Colour can be added later.
 
 ### Phase 2 — core library `rfa/`
 1. `RfaArchive` — parse the table and **both payload variants** (§2.2): raw
@@ -426,3 +443,29 @@ Delivered: `bin/*.orig.exe` oracle backups (SHA-256 verified), `tools/rfa_probe.
   workspace (`standardMesh_001.rfa` changed size mid-session) — fixtures are snapshots.
 * Deliberate divergence to decide in Phase 3: fixing `-f` changes behaviour that the
   original exits 0 on; the golden file records the broken behaviour so the change is explicit.
+
+### Phase 1 — DONE (2026-09-23)
+
+Delivered: `testcommon/` (TestUtils, ColBuilder, TestRunner), `src_test_rfa/test_rfa.cc`
++ `test_testcommon.{h,cc}` + `test_lzo.{h,cc}`, `third_party/minilzo/` (miniLZO 2.10),
+`Makefile.am` wiring (`check_PROGRAMS`/`TESTS`), a `make check` VS Code task.
+`make check` → PASS, 21/21 testcases.
+
+| # | Finding | Impact |
+|---|---|---|
+| 11 | `configure.ac` and `Makefile.am` were checked in with **CRLF** endings | `AC_CONFIG_FILES` entry became `"Makefile\r"`, so `configure` died with `cannot find input file`. Worse, the stray CR overwrote the error text in the terminal, making it near-unreadable. Fixed the files and added `.gitattributes` (`*.sh`, `*.ac`, `*.am` → `eol=lf`) so it cannot regress. |
+| 12 | `reconfigure.sh` was also CRLF | It failed outright under Cygwin (`$'\r': command not found`), which means the `reconfigure` task added in Phase 0 never worked. Fixed by the same change. |
+| 13 | `AM_CPPFLAGS` carries `-std=c++20` | Not valid for a C translation unit, so `minilzo.c` gets a per-target `CPPFLAGS` override. Any future `.c` file in this tree needs the same treatment. |
+| 14 | Sizing a decompression buffer from the *compressed* size is wrong | Caught by the new suite, not by review: 33-byte-repeating input compresses well over 64x, so the guessed buffer was too small and `lzo1x_decompress_safe` returned `LZO_E_OUTPUT_OVERRUN`. The RFA reader always knows `uncompressedSize`, so it must use it. Recorded in `test_lzo.cc`. |
+
+Note that finding 14 is exactly the class of bug that silently corrupts archives in
+production, and it was found by a test written minutes earlier — the harness paid for
+itself on day one.
+
+### Carried into Phase 2
+
+* `test_lzo` already pins the LZO1X literal-run encoding against the Phase 0 experiment,
+  so a mis-vendored LZO fails loudly instead of producing unreadable archives.
+* `CHUNK_SIZE`, the 12-byte descriptor arithmetic and the two payload variants are
+  documented in §2.2 and need to be implemented in `RfaArchive`/`RfaWriter`.
+* `test_rfa_format`, `test_rfa_archive`, `test_rfa_cli` still to be created.

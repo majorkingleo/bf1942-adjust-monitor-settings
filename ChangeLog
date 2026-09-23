@@ -1,3 +1,75 @@
+commit 826d50ff78f83b4d55ce46afd3d1dd5735d18898
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Wed Sep 23 13:25:55 2026 +0200
+
+    move vendored miniLZO out of the cpputils submodule
+    
+    cpputils is a git submodule, so writing our dependency inside it would dirty the
+    submodule, place our code in someone else's tree, and could not be committed from
+    this repository. miniLZO will be vendored into third_party/minilzo/ instead.
+    
+    Updates PLAN_rfa_tools.md (deliverable layout, Phase 1.4, decision D4 and its
+    consequences) and the AGENTS.md conventions.
+
+commit 7de64325266b21c17d304753bab1dbe076b1ff22
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Wed Sep 23 13:23:41 2026 +0200
+
+    Phase 0 done: oracle harness, golden CLI capture, corrected format model
+    
+    Implements Phase 0 of PLAN_rfa_tools.md and records what running its exit gate
+    turned up.
+    
+    * bin/*.orig.exe: immutable oracle backups, SHA-256 verified against both the
+      repo copies and the bf_pablov_mod copies.
+    * tools/rfa_probe.py: container dumper and structural validator.
+    * tools/rfa_names.py: stable sorted TSV directory dump, for diffing.
+    * tools/rfa_oracle.py: drives the originals, captures rc/stdout/stderr and
+      snapshots extracted trees with sizes and SHA-256.
+    * tools/rfa_golden.py + tests/golden/oracle-cli.json: 11 captured CLI scenarios
+      (usage banners, the terse error strings, exit codes) with a --check mode.
+    
+    Format model corrected after sweeping every .rfa in bf_pablov_mod (814 archives,
+    448127 entries, 99.99% structurally consistent):
+    
+      - the block header's first field is a chunk count, not a constant tag == 1,
+        and the descriptor table grows 12 bytes per extra chunk
+      - payloads are compressed per 32 KiB chunk, not per file
+      - storedSize == uncompressedSize means a raw payload with NO block header
+        (34617 entries, including 235 inside version-1 archives)
+      - version is 0 or 1 and does not select the payload layout
+      - uncompressedSize == 0 entries have storedSize == 4
+    
+    The constant-tag error is invisible on single-chunk files, which is exactly what
+    the small fixtures are; it survived the original probe matrix and two doc reviews.
+    
+    Also records that the originals' exit codes are not a success signal (-i9999 and
+    the broken -f both exit 0) and that line order in their stdout is unstable under
+    redirection, both of which constrain the Phase 3 compatibility tests.
+    
+    Updated rfa-format.md, AGENTS.md, tests/data/README.md and PLAN_rfa_tools.md.
+    Phase 0 exit gate passes: all four fixtures validate with exit 0 and zero
+    problems, and rfa_golden.py --check reproduces.
+
+commit 531269b150cd98e879a58a6fd2e19ba7e575b4da
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Wed Sep 23 13:13:48 2026 +0200
+
+    added RFA tooling skills, oracle binaries and test data
+    
+    Preparing the rfaPack/rfaUnpack reimplementation (see PLAN_rfa_tools.md).
+    
+    * .github/skills: copied the RFA-relevant skills from bf_pablov_mod
+      (rfa-unpack, bf1942-standalone-map) and corrected the format docs:
+      payload compression is LZO1X, entry nameLen has no NUL terminator,
+      and the entry flags field is per-entry rather than an archive constant.
+    * bin: original vendor rfaPack.exe/rfaUnpack.exe kept as the test oracle.
+    * tests/data: four real .rfa fixtures (one 251-entry FH map plus three tiny
+      archives covering the stored and LZO1X paths) with SHA-256 provenance.
+    * AGENTS.md: build instructions and the verified format facts.
+    * .vscode: cygwin make build tasks.
+    * .gitignore: ignore *.o and the future /bin/new/ shadow deploy dir.
+
 commit be9605018eae04f435669bbeea130e348549da35
 Author: Martin Oberzalek <kingleo@gmx.at>
 Date:   Mon Sep 15 23:14:13 2025 +0200

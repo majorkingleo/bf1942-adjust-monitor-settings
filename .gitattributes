@@ -1,0 +1,14 @@
+# Shell scripts are executed by Cygwin bash and must keep LF line endings.
+# A CRLF checkout breaks them with "$'\r': command not found" / "unexpected end of file".
+*.sh text eol=lf
+
+# Autotools inputs must be LF as well. With CRLF, the AC_CONFIG_FILES entry in
+# configure.ac becomes "Makefile\r" and config.status aborts with
+# "cannot find input file" - and the stray CR overwrites the error text in the
+# terminal, which makes it very hard to read.
+*.ac text eol=lf
+*.am text eol=lf
+
+# Vendored third-party sources are kept byte-identical to upstream, so pin their
+# endings too - a CRLF checkout would silently "modify" them.
+third_party/** text eol=lf

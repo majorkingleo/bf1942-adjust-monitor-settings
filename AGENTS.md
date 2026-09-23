@@ -18,8 +18,17 @@ C:\cygwin64\bin\bash.exe -lc "cd '<workspace>' && make"
 
 * A **login** shell (`-lc`) is required — only then are `make` and
   `x86_64-w64-mingw32-g++` on `PATH`.
-* `reconfigure.sh` regenerates the build system (`aclocal`, `automake`, `autoconf`, `configure`).
-* Test suite is wired to `make check`.
+* `reconfigure.sh` regenerates the build system (`aclocal`, `automake`, `autoconf`,
+  `configure`). It must keep **LF** line endings (enforced by `.gitattributes`): with CRLF
+  it fails under Cygwin, and a CRLF `configure.ac` breaks `configure` outright with a
+  message the stray CR then mangles beyond recognition.
+* `make check` builds and runs the test suite (VS Code task `make check`). Harness is in
+  `testcommon/`; subjects live in `src_test_rfa/` as `test_<subject>.{h,cc}` pairs and are
+  registered in `src_test_rfa/test_rfa.cc`. Run one case with `test_rfa.exe -t <idx>`.
+* `AM_CPPFLAGS` contains `-std=c++20`, which is invalid for a C translation unit.
+  Any `.c` file added to this tree needs its own per-target `CPPFLAGS`, as
+  `third_party/minilzo/libminilzo.a` does.
+* The suite must be able to report failure: `test_rfa.exe -t 99` exits 1 by design.
 
 ## Skills
 
