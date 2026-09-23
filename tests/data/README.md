@@ -8,12 +8,15 @@ See `../../.github/skills/bf1942-standalone-map/references/rfa-format.md` for th
 
 ## Contents
 
-| File | Bytes | Entries | LZO1X | stored | `tocOffset` | `flags` values seen | SHA-256 |
+| File | Bytes | Entries | Payload variant | compressed | `tocOffset` | `version` | SHA-256 |
 |---|---|---|---|---|---|---|---|
-| `fh/Battle_Of_Pavlov-1942.rfa` | 6,002,393 | 251 | 248 | 3 | 5,975,511 | `0x7C001CD8`, `0xFFFFFFFF` | `7DCAEFE37266F797876B6859544F316B5FE2F65460F284E809A4062FA3A1CDEA` |
-| `tiny/standardMesh_001.rfa` | 2,199 | 6 | 6 | 0 | 1,837 | `0x00000000` | `B33EDB3ABD09CE3220D392F22400C24D3859D3963D6A91D19B23AF63D7DB9A08` |
-| `tiny/salerno_001.rfa` | 1,355 | 1 | 1 | 0 | 1,289 | `0x77FCB6DE` | `084314E9C333DB18111360D5C606FFA5A5B1E8137FFA3A720E9C8290A19DD591` |
-| `tiny/Peenemunde_001.rfa` | 1,221 | 1 | 0 | 1 | 1,147 | `0x00000000` | `F531156299CAD5370F73E9C8B94CA129C20A20F4087683655009FDBC714CE46C` |
+| `fh/Battle_Of_Pavlov-1942.rfa` | 6,002,393 | 251 | chunked ×251 | 248 | 5,975,511 | 1 | `7DCAEFE37266F797876B6859544F316B5FE2F65460F284E809A4062FA3A1CDEA` |
+| `tiny/standardMesh_001.rfa` | 2,199 | 6 | chunked ×6 | 6 | 1,837 | 1 | `B33EDB3ABD09CE3220D392F22400C24D3859D3963D6A91D19B23AF63D7DB9A08` |
+| `tiny/salerno_001.rfa` | 1,355 | 1 | chunked ×1 | 1 | 1,289 | 1 | `084314E9C333DB18111360D5C606FFA5A5B1E8137FFA3A720E9C8290A19DD591` |
+| `tiny/Peenemunde_001.rfa` | 1,221 | 1 | **raw ×1** | 0 | 1,147 | **0** | `F531156299CAD5370F73E9C8B94CA129C20A20F4087683655009FDBC714CE46C` |
+
+`flags` values seen: `Battle_Of_Pavlov-1942.rfa` mixes `0x7C001CD8` (5 entries) and
+`0xFFFFFFFF` (246); `salerno_001.rfa` uses `0x77FCB6DE`; the other two use `0x00000000`.
 
 ### Provenance
 
@@ -31,12 +34,20 @@ See `../../.github/skills/bf1942-standalone-map/references/rfa-format.md` for th
   compressed and stored entries, and **two different `flags` values in one archive**.
 * **`tiny/salerno_001.rfa`** — smallest compressed archive; a single LZO1X entry with a third
   distinct `flags` value.
-* **`tiny/Peenemunde_001.rfa`** — smallest archive overall; a single **stored** (uncompressed)
-  entry, so it exercises the `payloadSize == uncompressedSize` path.
-* **`tiny/standardMesh_001.rfa`** — several entries, all compressed, `flags == 0`.
+* **`tiny/Peenemunde_001.rfa`** — smallest archive overall, and the only **raw-payload**
+  fixture: `version 0`, `storedSize == uncompressedSize`, so there is no block header at
+  all and the payload starts directly at `dataOffset`. Also small enough to hand-verify.
+  This variant covers 194 of the 814 archives in `bf_pablov_mod` (23%), so without this
+  fixture the whole raw path would go untested.
+* **`tiny/standardMesh_001.rfa`** — several entries, all chunked and compressed, `flags == 0`.
 
-Together the tiny fixtures cover both payload paths and three distinct `flags` values for very
-little repository weight.
+Together the tiny fixtures cover both payload variants, both chunk states and four
+distinct `flags` values for very little repository weight.
+
+> ⚠️ Every fixture here is **single-chunk** (all files are far below 32 KiB). The
+> multi-chunk path is exercised by `fh/Battle_Of_Pavlov-1942.rfa` — but only a handful
+> of its 251 entries exceed 32 KiB. Generate a synthetic ≥ 100 KiB multi-chunk fixture in
+> Phase 2 as well; do not rely on this directory alone for chunk coverage.
 
 ## Notes / caveats
 

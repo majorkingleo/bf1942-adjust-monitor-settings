@@ -35,10 +35,20 @@ Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, an
 
 ## Critical facts (verified — do not re-derive from the internet)
 
-* RFA payload compression is **LZO1X** (Oberhumer LZO1X-1). It is **not** zlib/deflate,
-  not FastLZ, not RefPack. miniLZO's `lzo1x_1_compress` / `lzo1x_decompress` are compatible.
+* RFA payload compression is **LZO1X** (Oberhumer LZO1X-1), applied **independently per
+  32 KiB chunk**. It is **not** zlib/deflate, not FastLZ, not RefPack. miniLZO's
+  `lzo1x_1_compress` / `lzo1x_decompress` are compatible.
 * ⚠️ The `RefractorForge` "RFA_Format_Notes" found online describe a **different** custom
   LZ77 codec for **Battlefield Vietnam**. They do **not** apply to BF1942.
+* The per-entry data block has **two variants** and you must choose between them from the
+  sizes, *not* from `version`:
+  * `storedSize == uncompressedSize` (or `uncompressedSize == 0`) → **raw**, no block
+    header, payload starts at `dataOffset`;
+  * otherwise → the first u32 at `dataOffset` is a **chunk count**, followed by 12-byte
+    chunk descriptors, then the concatenated per-chunk LZO1X payloads.
+  Do not assume a constant `tag == 1` header — that mistake is invisible on small files.
+* `version` is `0` or `1` and does **not** select the payload layout; both occur, and
+  235 raw entries live in version-1 archives.
 * Entry `nameLen` is the exact name length — there is **no** NUL terminator in the stream.
 * The entry `flags` field is **per-entry**, not an archive constant. Treat it as opaque and
   preserve it on in-place updates.

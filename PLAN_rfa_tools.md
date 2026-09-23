@@ -30,47 +30,84 @@ These change what the old documentation says. All were checked on this machine.
 | CLI spec | `bin\Readme.txt` (647 B) |
 | Value | **keep as golden oracle** — never overwrite without a backup copy |
 
-### 2.2 Container format — re-verified byte-for-byte
-Verified by parsing a real FH archive and an archive written by `rfaPack.exe`:
+### 2.2 Container format — re-validated against 814 archives / 448,127 entries
+
+Machine-validated on 2026-09-23 across **every** `.rfa` in the `bf_pablov_mod` tree
+(814 archives, 448,127 entries): **99.99% structurally consistent** with the model
+below. Tooling: `tools/rfa_probe.py` (dumper + validator).
 
 ```
 [0]  u32  tocOffset          (directoryOffset)
-[4]  u32  version            (= 1)
-[8 .. tocOffset)             contiguous file data blocks
+[4]  u32  version            (0 or 1 - does NOT select the payload layout)
+[8 .. tocOffset)             data blocks. The first block is commonly at offset 156;
+                             the bytes before it are an opaque fixed region that no
+                             entry references.
 [tocOffset]                  directory:
                                u32 fileCount
                                fileCount x entry
-                               u32 0                       // terminator, table ends at EOF
+                               u32 0                       // terminator, table runs to EOF
 entry:
     u32  nameLen             // EXACT string length, NO NUL terminator
     char name[nameLen]       // e.g. "bf1942/levels/Battle_Of_Pavlov-1942/Conquest.con"
-    u32  storedSize          // == 16 + payloadSize
+    u32  storedSize
     u32  uncompressedSize
-    u32  dataOffset          // absolute offset of the 16-byte block header
-    u32  reserved            // 0 in DICE archives
+    u32  dataOffset          // absolute offset of this entry's data block
+    u32  reserved            // 0 in the archives observed
     u32  reserved
-    u32  flags               // per-entry, NOT a constant (see below)
-data block @ dataOffset:
-    u32  tag                 // = 1
-    u32  payloadSize
-    u32  uncompressedSize
-    u32  0
-    byte payload[payloadSize]
+    u32  flags               // per-entry, NOT a constant
 ```
 
-* Entries are ordered **ascending by name** (ASCII), confirmed on the FH archive
-  (`Conquest.con` → `Conquest/ControlPoints.con` → `Conquest/ControlPointTemplates.con`).
-* `payloadSize == uncompressedSize` → payload is **stored raw**.
-* `payloadSize <  uncompressedSize` → payload is **LZO1X compressed**.
+**Payload layout - two variants, chosen per entry from the sizes, not from `version`:**
 
-**Documentation corrections required** (the workspace's own reference docs are wrong):
+*Raw, no block header* — when `storedSize == uncompressedSize`, or
+`uncompressedSize == 0` (which stores 4 bytes). The payload sits directly at
+`dataOffset`, `storedSize` bytes long. Seen 34,617 times: 34,382 in version-0 archives
+**and 235 inside version-1 archives**, so version is not a usable discriminator.
+
+*Chunked / LZO1X* — the common case, 413,510 entries:
+
+```
+u32 chunkCount
+u32 chunk[0].compressedSize
+u32 chunk[0].uncompressedSize
+u32 chunk[0].payloadOffset      // always 0
+(chunkCount - 1) x { u32 compressedSize; u32 uncompressedSize; u32 payloadOffset }
+byte[sum(compressedSize)] payload   // chunks concatenated, in order
+```
+
+Verified invariants:
+
+* `chunkCount == ceil(uncompressedSize / 32768)` — chunks are **32 KiB**; every chunk
+  but the last has `uncompressedSize == 32768`
+* `storedSize == 16 + 12 * (chunkCount - 1) + sum(compressedSize)`
+* `sum(chunk.uncompressedSize) == entry.uncompressedSize`
+* `payloadOffset[i] == sum(compressedSize[0..i-1])`
+* each chunk is independently LZO1X if `compressedSize < uncompressedSize`
+* `compressedSize` may exceed `uncompressedSize` for incompressible chunks
+
+> ⚠️ **This corrects the first pass of this plan.** The 16-byte prefix is *not* a
+> constant `tag == 1` sub-header holding one payload: the first field is the
+> **chunk count**, and the descriptor table grows by 12 bytes per extra chunk. The
+> error is invisible on single-chunk entries — which is exactly what the small
+> fixtures contain — so it survived the original probe matrix, a ground-truth
+> extraction and two rounds of doc review. Only the 814-archive sweep exposed it.
+
+Entries are ordered **ascending by name** (ASCII). `flags` is per-entry; observed
+values are `0xFFFFFFFF`, `0x7C001CD8`, `0x77FCB6DE`, `0x00000000`, and `rfaPack.exe`
+writes `0` which the engine still loads — so treat it as opaque and preserve it on
+`-u` updates.
+
+**Documentation corrections required** (the workspace's own reference docs were wrong):
 
 | Old claim | Reality |
 |---|---|
-| "`nameLen` includes the NUL terminator" | `nameLen` is the exact length; no NUL is written |
-| "`flags` is an archive-level constant" | per-entry; DICE archives show `0xFFFFFFFF` and `0x7C001CD8`; `rfaPack.exe` writes `0` and the engine still loads it |
-| "`0x028A0220` for base game archives" | misreading — the actual value is `0x7C001CD8` |
-| "custom compression algorithm (not zlib)" | it is **LZO1X** (see 2.3) |
+| "`nameLen` includes the NUL terminator" | exact length; no NUL is written |
+| "`version` is always 1" | `0` and `1` both occur; version 0 archives are always raw-payload |
+| "block header is `tag(=1), payloadSize, uncompressedSize, reserved`" | **`chunkCount` + 12-byte chunk descriptors** |
+| "`payloadSize == uncompressedSize` → payload stored raw" (still with a header) | `storedSize == uncompressedSize` → **no header at all** |
+| "`flags` is an archive-level constant" | per-entry; varies within a single archive |
+| "`0x028A0220` for base game archives" | misreading — the real value is `0x7C001CD8` |
+| "custom compression algorithm (not zlib)" | **LZO1X**, applied per 32 KiB chunk (see 2.3) |
 
 ### 2.3 Compression is **LZO1X** — confirmed two independent ways
 
@@ -79,9 +116,10 @@ data block @ dataOffset:
 `lzo1x_decompress` for RFA payloads, crediting Oberhumer's LZO library.
 
 **b) Own controlled experiment.** Packed incompressible N-byte files with the
-original `rfaPack.exe -Compress`:
+original `rfaPack.exe -Compress`. These inputs are smaller than one chunk, so each
+produced a **single-chunk** block and `compressedSize` is that chunk's size:
 
-| input N | payloadSize | first byte | rule |
+| input N | compressedSize | first byte | rule |
 |---|---|---|---|
 | 20 | 24 | `0x25` (37) | 20 + 17 |
 | 30 | 34 | `0x2f` (47) | 30 + 17 |
@@ -89,7 +127,7 @@ original `rfaPack.exe -Compress`:
 | 60 | 64 | `0x4d` (77) | 60 + 17 |
 | 100 | 104 | `0x75` (117) | 100 + 17 |
 
-That is exactly LZO1X's literal-run rule (`count = byte − 17`), and `payloadSize = N + 4`
+That is exactly LZO1X's literal-run rule (`count = byte − 17`), and `compressedSize = N + 4`
 (1 length byte + N literals + the 3-byte LZO1X end marker `11 00 00`).
 Cross-checked on the real FH archive: first entry decodes as opcode `0x30` → 31 literals
 `"Game.setNumberOfTickets 1 115\r\n"`, matching the ground-truth file extracted with
@@ -165,14 +203,28 @@ bf1942-adjust-monitor-settings/
 
 ## 4. Phases
 
-### Phase 0 — baseline & oracle harness  *(no product risk)*
-1. Back up the original binaries as `bin/rfaPack.orig.exe`, `bin/rfaUnpack.orig.exe`.
-2. Move the throwaway probes I wrote into the repo as `tools/rfa_probe.py`,
-   `tools/rfa_names.py` (container dumper) and `tools/rfa_oracle.py`
-   (run the original tool, capture stdout, collect extracted tree + hashes).
-3. Record the usage banner and chatter strings verbatim as golden text files.
+### Phase 0 — baseline & oracle harness  *(no product risk)* — ✅ DONE
+1. ✅ Backed up the originals as `bin/rfaPack.orig.exe` / `bin/rfaUnpack.orig.exe`.
+   SHA-256 verified identical to both `bin/*.exe` and the `bf_pablov_mod` copies, so the
+   oracle is provably the shipped build.
+2. ✅ Oracle harness added (the throwaway probes were consolidated, not just moved):
+   * `tools/rfa_probe.py` — container dumper **and structural validator**; also absorbs
+     the container-summary and name-dump roles
+   * `tools/rfa_names.py` — stable sorted TSV of the directory table, for diffing
+   * `tools/rfa_oracle.py` — drives `*.orig.exe`, captures rc/stdout/stderr and snapshots
+     the extracted tree with sizes + SHA-256
+   * `tools/rfa_golden.py` — captures 11 CLI scenarios (usage banners, the terse error
+     strings the `.ps1` skills match on, exit codes) into `tests/golden/oracle-cli.json`,
+     with `--check` to re-verify
+3. ✅ Golden files recorded and reproducible — `python tools/rfa_golden.py --check` → match.
 
-**Exit gate:** `python tools/rfa_probe.py <archive>` reproduces §2.2 on every fixture.
+**Exit gate: ✅ PASSED** — `python tools/rfa_probe.py <fixture>` validates all four
+fixtures with exit 0 and zero problems.
+
+**Unexpected payoff:** running the gate exposed that §2.2 was wrong, and extending the
+check to every archive in the mod tree produced the corrected format model now in §2.2.
+Findings that would have cost days inside Phase 2 were found in an afternoon of Phase 0.
+See §10 for the full list.
 
 ### Phase 1 — test-suite scaffolding (cpputilstest pattern)
 1. Create `testcommon/` with `TestUtils`/`ColBuilder` in the cpputilstest style.
@@ -186,22 +238,30 @@ bf1942-adjust-monitor-settings/
 **Exit gate:** `make check` runs and reports a green (if empty) suite.
 
 ### Phase 2 — core library `rfa/`
-1. `RfaArchive` — parse the table, validate (`version == 1`, `storedSize == 16 + payloadSize`,
-   offsets in range, terminator), expose entries without loading the whole payload.
-   Must handle a 707 MB `texture.rfa` **without** slurping it into RAM.
-2. `LzoCodec` — decompress + compress wrappers; **one workmem per thread**; expose a
-   "store raw instead" path for incompressible input.
-3. `RfaWriter` — pack a directory tree, `-u` update, deterministic entry ordering,
-   deterministic layout regardless of thread count.
-4. Parallelism: `std::thread::hardware_concurrency()` (overridable) worker pool;
-   decompress/compress file bodies in parallel, write results in a deterministic order.
-   Read the source region in offset order to keep the I/O sequential.
+1. `RfaArchive` — parse the table and **both payload variants** (§2.2): raw
+   (`storedSize == uncompressedSize`, no header) and chunked (`chunkCount` + 12-byte
+   descriptors). Validate every invariant in §2.2. Expose entries and chunk ranges
+   lazily. Must handle a 741 MB `texture.rfa` **without** slurping it into RAM — the
+   5693-entry archives have large per-entry descriptor tables too.
+2. `LzoCodec` — miniLZO wrappers; **one workmem per thread**; expose a "store raw"
+   fallback, since a chunk's `compressedSize` legitimately exceeds its
+   `uncompressedSize` for incompressible data.
+3. `RfaWriter` — pack a directory tree, `-u` update, deterministic entry ordering and
+   layout; emit the raw variant when compression does not pay off.
+4. Parallelism: worker pool sized by `std::thread::hardware_concurrency()` (overridable);
+   compress/decompress **per 32 KiB chunk** — chunks are independent of one another, so
+   the natural unit of work is finer than a whole file. Read the source region in offset
+   order so I/O stays sequential.
 
 **Exit gate (unit tests):**
 * table round-trip: parse → serialize → parse, byte-identical table.
-* LZO round-trip over random data, all-empty, all-same, 1-byte, 4 GB-boundary sizes.
+* variant coverage: round-trip a raw entry, a single-chunk entry and a multi-chunk entry
+   (≥ 100 KiB, i.e. ≥ 4 chunks), plus an empty entry (`uncompressedSize == 0`).
+* LZO round-trip over random data, all-empty, all-same, 1-byte, `CHUNK_SIZE ± 1` and
+   exact-multiple-of-`CHUNK_SIZE` sizes.
 * fuzz: random truncated/corrupt archives must fail cleanly, never crash or over-read.
 * determinism: 1 thread vs 8 threads → identical archive bytes.
+* sweep: validate every fixture plus a large real archive via `tools/rfa_probe.py`.
 
 ### Phase 3 — CLI tools
 1. `rfaUnpack.cc` / `rfaPack.cc` reproducing §2.4 exactly — **including the chatter strings**,
@@ -317,9 +377,45 @@ in this repo, since `bf_pablov_mod` does not have one.
 
 ---
 
-## 9. Immediate next actions (once decisions are made)
+## 9. Immediate next actions
 
-1. Back up the oracle binaries; add `tools/rfa_oracle.py`.
-2. `./reconfigure.sh && make check` — prove the new test wiring builds.
-3. Implement `RfaArchive` + `LzoCodec` with the Phase 2 golden tests.
-4. Implement both CLIs and turn on the oracle-comparison suite.
+1. ✅ Back up the oracle binaries; add `tools/rfa_oracle.py` — done, Phase 0 complete.
+2. ▶ **Next: Phase 1** — `testcommon/` harness, `src_test_rfa/` skeletons, `check_PROGRAMS`/
+   `TESTS` wiring in `Makefile.am`, vendor miniLZO, then `./reconfigure.sh && make check`.
+3. Phase 2 — `RfaArchive` + `LzoCodec` with the variant/chunk tests listed above.
+4. Phase 3 — both CLIs, then the oracle-comparison suite driven by `tools/rfa_golden.py`.
+
+---
+
+## 10. Progress log
+
+### Phase 0 — DONE (2026-09-23)
+
+Delivered: `bin/*.orig.exe` oracle backups (SHA-256 verified), `tools/rfa_probe.py`,
+`tools/rfa_names.py`, `tools/rfa_oracle.py`, `tools/rfa_golden.py`,
+`tests/golden/oracle-cli.json` (11 scenarios, `--check` reproducible),
+`tests/data/` (4 real fixtures with provenance + hashes). Exit gate passed.
+
+### Corrections found during Phase 0
+
+| # | Finding | Impact |
+|---|---|---|
+| 1 | The block header's first field is a **chunk count**, not `tag == 1`; descriptor table grows 12 bytes per extra chunk | Rewrote §2.2 and the format skill doc. Without this the reader works on small files and silently corrupts anything > 32 KiB |
+| 2 | Payload compression is **per 32 KiB chunk**, not per file | Changes the parallelism unit (finer than per file) and the codec API |
+| 3 | `storedSize == uncompressedSize` means **no block header at all** (raw payload at `dataOffset`) | A whole second variant; 34,617 entries |
+| 4 | `version` is `0` or `1` and does **not** select the layout — 235 raw entries live in version-1 archives | Version-based branching would be wrong |
+| 5 | 194 of 814 archives (23%) are version-0 raw; one fixture (`Peenemunde_001.rfa`) is one of them | Without a fixture for this, the variant would have been missed |
+| 6 | `uncompressedSize == 0` entries have `storedSize == 4`, not `0` | Needs an explicit case; 56 entries |
+| 7 | Original exit codes are not a success signal: `-i9999` (index out of range) and the broken `-f` both print an error yet **exit 0** | Compatibility tests must not rely on exit codes alone |
+| 8 | `rfaPack.exe` output contains a variable `TimeTaken: N` | Golden comparison needs normalisation |
+| 9 | Line **order** in the originals' stdout is not stable under redirection (mixed stream buffering) | Compare message presence, not emission order |
+| 10 | A short opaque region precedes the first data block (first block commonly at offset 156) | Must not be regenerated blindly; preserve or replicate |
+
+### Carried into Phase 1/2
+
+* `rfa_probe.py` now validates all four fixtures with **zero problems**; reuse it as the
+  Phase 2 sweep tool.
+* `tests/data/README.md` records that `bf_pablov_mod` is an actively changing pipeline
+  workspace (`standardMesh_001.rfa` changed size mid-session) — fixtures are snapshots.
+* Deliberate divergence to decide in Phase 3: fixing `-f` changes behaviour that the
+  original exits 0 on; the golden file records the broken behaviour so the change is explicit.
