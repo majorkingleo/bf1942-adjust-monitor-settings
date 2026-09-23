@@ -78,3 +78,11 @@ testcommon/.*.txt
 
 # shadow deploy target for the new rfa tools (see PLAN_rfa_tools.md)
 /bin/new/
+
+# python bytecode
+# tools/*.py import each other, so running any of them creates tools/__pycache__/.
+# These are regenerated on every run and must never be committed.
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
