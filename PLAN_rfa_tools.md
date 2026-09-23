@@ -181,7 +181,8 @@ bf1942-adjust-monitor-settings/
     RfaWriter.cc/.h                      // write: pack / update / replace, deterministic order
     LzoCodec.cc/.h                       // LZO1X compress/decompress, per-thread workmem
     ThreadPool.cc/.h                     // or reuse cpputils/thread
-  cpputils/cpputilsshared/lzo/           // vendored miniLZO (or clean-room Lzo1x.cc)
+  third_party/minilzo/                   // vendored miniLZO: minilzo.c, minilzo.h, lzoconf.h
+                                         //   deliberately NOT under cpputils/ - see note below
   rfaPack.cc                             <- CLI program
   rfaUnpack.cc                           <- CLI program
   testcommon/                            <- cpputilstest-style harness
@@ -198,6 +199,11 @@ bf1942-adjust-monitor-settings/
   .vscode/tasks.json                     // add make check / deploy tasks
   PLAN_rfa_tools.md                      // this file
 ```
+
+> **Why not `cpputils/`:** `cpputils` is a **git submodule** (`.gitmodules` is tracked and
+> `git submodule status` resolves it). Writing our files there would dirty the submodule,
+> put a dependency of ours inside someone else's tree, and could not be committed from
+> this repository. Vendored third-party sources go in `third_party/` instead.
 
 ---
 
@@ -231,8 +237,8 @@ See §10 for the full list.
 2. Create `src_test_rfa/` with one `test_*.{cc,h}` pair per subject and a runner.
 3. Extend `Makefile.am`: `check_PROGRAMS`, `TESTS`, `TESTS_ENVIRONMENT`, plus `EXTRA_DIST`
    for `tests/data`. Wire `make check`.
-4. Vendor miniLZO into `cpputils/cpputilsshared/lzo/` **or** add a clean-room
-   `Lzo1x.cc` (decision D4) and add it to `noinst_LIBRARIES`.
+4. Vendor miniLZO into `third_party/minilzo/` (decision D4) and add it to
+   `noinst_LIBRARIES`. **Not** under `cpputils/` — that is a submodule.
 5. Run `./reconfigure.sh` once so the generated `Makefile.in` knows the new targets.
 
 **Exit gate:** `make check` runs and reports a green (if empty) suite.
@@ -365,12 +371,13 @@ in this repo, since `bf_pablov_mod` does not have one.
 | D1 | Test suite location | **Integrate into this repo** — `testcommon/` + `src_test_rfa/`, wired via `check_PROGRAMS`/`TESTS` so `make check` runs it |
 | D2 | Skills to copy | **RFA-relevant subset only** — `rfa-unpack/`, `bf1942-standalone-map` refs+scripts, `bin\Readme.txt`; plus a new `AGENTS.md` |
 | D3 | Harness directory name | **`testcommon/`** — avoids ambiguity with the existing root `common.cc` / `common.h` |
-| D4 | Codec dependency | **Vendor miniLZO** into `cpputils/cpputilsshared/lzo/` (GPLv2+, compatible with this repo's GPLv3) |
+| D4 | Codec dependency | **Vendor miniLZO** into `third_party/minilzo/` (GPLv2+, compatible with this repo's GPLv3). **Not** under `cpputils/`, which is a submodule |
 | D5 | Deployment | **Shadow in `bin\new\` first** — validate against the real `.ps1` skills before touching the originals |
 
 ### Consequences folded into the plan
 * `Makefile.am` gains `check_PROGRAMS` + `TESTS` + `EXTRA_DIST`; `reconfigure.sh` is re-run once.
-* miniLZO is added to `noinst_LIBRARIES` (or built directly into the two programs + the test runner)
+* miniLZO lives in `third_party/minilzo/` — never inside `cpputils/`, which is a submodule — and is
+  added to `noinst_LIBRARIES` (or built directly into the two programs and the test runner)
   with `-DMINILZO_HAVE_CONFIG_H` off (standalone build, no config.h requirement).
 * Phase 4 step 3 becomes: copy new binaries to `E:\progs\bf_pablov_mod\bin\new\`, run the existing
   `.ps1` skills against them, and only then promote them one level up with `.orig.exe` backups.

@@ -57,7 +57,9 @@ Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, an
 
 ## Conventions
 
-* `cpputils/` is **vendored**, not a submodule — do not add `.gitmodules`.
+* `cpputils/` is a **git submodule** (`.gitmodules` is tracked and `git submodule status`
+  resolves it) — do not add our own files inside it. Third-party code we vendor goes in
+  `third_party/`.
 * Test harness lives in `testcommon/` (root-level `common.cc`/`common.h` already exist for the
   monitor tools, so `common/` would be ambiguous).
 * One `test_<subject>.{cc,h}` pair per subject in `src_test_*/`.
