@@ -90,9 +90,10 @@ Conclusions:
 
 `rfaUnpack.exe` transparently decompresses the payload compression, which is
 **LZO1X** (the Oberhumer LZO1X-1 stream format — see the sibling skill's
-`references/rfa-format.md` for the verified evidence). An entry is compressed
-when its 16-byte sub-header reports `payloadSize < uncompressedSize`. Generic
-tools (7-Zip, .NET `DeflateStream`) cannot decompress these payloads.
+`references/rfa-format.md` for the verified evidence). Within a chunked entry each
+32 KiB chunk is an LZO1X stream **iff `compressedSize != uncompressedSize`** —
+inequality, not less-than, because LZO1X *expands* small or incompressible chunks.
+Generic tools (7-Zip, .NET `DeflateStream`) cannot decompress these payloads.
 
 The entry `flags` field is **per-entry**, not an archive-level constant: a real FH
 archive contained 246 entries with `0xFFFFFFFF` and 5 with `0x7C001CD8`. Treat it
