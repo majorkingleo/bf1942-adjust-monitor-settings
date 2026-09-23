@@ -1,3 +1,42 @@
+commit ffd76f1031c1ced868fc7740b8f4bd8e523fbfea
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Wed Sep 23 13:34:39 2026 +0200
+
+    Phase 1 done: cpputilstest-style suite + vendored miniLZO
+    
+    Implements Phase 1 of PLAN_rfa_tools.md. make check now builds and runs
+    src_test_rfa/test_rfa.exe: 21/21 testcases pass.
+    
+    New:
+    * testcommon/ - TestUtils (TestCaseBase plus the four canned case types),
+      ColBuilder (ASCII result table) and TestRunner, API-compatible with
+      majorkingleo/cpputilstest. Upstream repeats the run/report loop in every
+      test_<component>.cc; hoisting it into TestRunner makes each program a list.
+    * src_test_rfa/ - test_rfa.cc runner, test_testcommon (harness self-tests, so a
+      silently-passing harness cannot masquerade as green) and test_lzo (codec
+      round-trip, 32 KiB chunk boundaries, truncated input, and the LZO1X
+      literal-run encoding pinned against the Phase 0 experiment).
+    * third_party/minilzo/ - miniLZO 2.10 vendored unmodified, with COPYING and a
+      provenance README. Deliberately not under cpputils/, which is a submodule.
+    * Makefile.am - check_PROGRAMS/TESTS wiring and the noinst libraries; plus a
+      make check VS Code task.
+    
+    Fixed:
+    * configure.ac, Makefile.am and reconfigure.sh were checked in with CRLF
+      endings. The AC_CONFIG_FILES entry became "Makefile\r", so configure died
+      with "cannot find input file", and the stray CR overwrote the error text in
+      the terminal. reconfigure.sh also failed outright under Cygwin, meaning the
+      reconfigure task added in Phase 0 never actually worked. Converted to LF and
+      pinned with .gitattributes.
+    * TestCaseFuncOneFile now deletes its scratch file after the run.
+    * libminilzo needs a per-target CPPFLAGS: AM_CPPFLAGS carries -std=c++20, which
+      is not valid for a C translation unit.
+    
+    The suite earned its keep immediately: it caught that sizing a decompression
+    buffer from the compressed size is wrong (33-byte-repeating input compresses
+    well over 64x, yielding LZO_E_OUTPUT_OVERRUN). The RFA reader must use the
+    uncompressedSize from the directory table instead.
+
 commit 826d50ff78f83b4d55ce46afd3d1dd5735d18898
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Wed Sep 23 13:25:55 2026 +0200

@@ -260,31 +260,43 @@ runner's own failure paths were verified by hand (`-t 99` → exit 1, `--bogus` 
 * `testcommon/` is standard-library only; upstream pulls `ColoredOutput`/`Arg`/`OutDebug`
   from `cpputils/io`, which this project does not build. Colour can be added later.
 
-### Phase 2 — core library `rfa/`
-1. `RfaArchive` — parse the table and **both payload variants** (§2.2): raw
-   (`storedSize == uncompressedSize`, no header) and chunked (`chunkCount` + 12-byte
-   descriptors). Validate every invariant in §2.2. Expose entries and chunk ranges
-   lazily. Must handle a 741 MB `texture.rfa` **without** slurping it into RAM — the
-   5693-entry archives have large per-entry descriptor tables too.
-2. `LzoCodec` — miniLZO wrappers; **one workmem per thread**; expose a "store raw"
-   fallback, since a chunk's `compressedSize` legitimately exceeds its
-   `uncompressedSize` for incompressible data.
-3. `RfaWriter` — pack a directory tree, `-u` update, deterministic entry ordering and
-   layout; emit the raw variant when compression does not pay off.
-4. Parallelism: worker pool sized by `std::thread::hardware_concurrency()` (overridable);
-   compress/decompress **per 32 KiB chunk** — chunks are independent of one another, so
-   the natural unit of work is finer than a whole file. Read the source region in offset
-   order so I/O stays sequential.
+### Phase 2 — core library `rfa/` — ⏳ IN PROGRESS
 
-**Exit gate (unit tests):**
-* table round-trip: parse → serialize → parse, byte-identical table.
-* variant coverage: round-trip a raw entry, a single-chunk entry and a multi-chunk entry
-   (≥ 100 KiB, i.e. ≥ 4 chunks), plus an empty entry (`uncompressedSize == 0`).
-* LZO round-trip over random data, all-empty, all-same, 1-byte, `CHUNK_SIZE ± 1` and
-   exact-multiple-of-`CHUNK_SIZE` sizes.
-* fuzz: random truncated/corrupt archives must fail cleanly, never crash or over-read.
-* determinism: 1 thread vs 8 threads → identical archive bytes.
-* sweep: validate every fixture plus a large real archive via `tools/rfa_probe.py`.
+1. ✅ `RfaFormat.h` — the container model: `CHUNK_SIZE`, `BLOCK_HEADER_SIZE`,
+   `CHUNK_DESCRIPTOR_SIZE`, `PayloadVariant`, `Chunk`, `Entry`, `chunk_count_for()`.
+   Header-only, no I/O, so the arithmetic is testable in isolation.
+2. ✅ `LzoCodec` — miniLZO wrapper. One instance per thread owns the work buffer;
+   `decompress()` is static and stateless, so concurrent decompression needs no locking.
+   `compress()` deliberately reports the size so callers can fall back to storing a chunk
+   verbatim, since a chunk's `compressedSize` may exceed its `uncompressedSize`.
+3. ✅ `RfaArchive` + `PayloadReader` — reader for **both payload variants**. Validates
+   every invariant in §2.2 and collects complaints in `problems()` instead of failing
+   hard. Parsing reads the table and the chunk descriptor tables but **never a payload**,
+   so a 741 MB archive opens cheaply. `PayloadReader` holds its own file handle, which is
+   what makes per-entry parallel extraction safe by construction.
+4. ⏳ `RfaWriter` — pack a directory tree, `-u` update, deterministic entry ordering and
+   layout. **Not started.**
+5. ⏳ Parallelism — worker pool sized by `std::thread::hardware_concurrency()`, work unit
+   = one 32 KiB chunk. **Not started** (the reader is already structured for it).
+
+**Exit gate progress:**
+
+| Item | Status |
+|---|---|
+| table round-trip (parse → serialize → parse) | ⏳ needs `RfaWriter` |
+| variant coverage: raw / single-chunk / multi-chunk | ✅ raw (`Peenemunde_001.rfa`), single-chunk (`salerno_001.rfa`), multi-chunk (`Battle_Of_Pavlov-1942.rfa`: 92 entries, largest 22 chunks / 699,192 bytes) |
+| variant coverage: empty entry | ❌ **no fixture has one** — needs `RfaWriter` to synthesise it |
+| LZO round-trip incl. `CHUNK_SIZE ± 1` and multiples | ✅ |
+| corrupt input fails cleanly, never crashes | ✅ truncated / garbage / empty file / corrupted payload |
+| every fixture entry decompresses to its declared size | ✅ all 259 entries across the 4 fixtures |
+| determinism: 1 thread vs 8 threads → identical bytes | ⏳ needs `RfaWriter` |
+| sweep: validate every fixture | ✅ `problems()` empty for all four, matching `tools/rfa_probe.py` |
+
+Coverage note: 48 testcases pass, but the reader has **not yet been checked against the
+oracle** — Phase 3's comparison against `bin/rfaUnpack.orig.exe` is what proves the
+extracted bytes are the *right* bytes, not merely self-consistent. The one exception is
+`archive_conquest_con_matches_phase0_ground_truth`, which pins a real 373-byte file
+against bytes the original tool wrote to disk in Phase 0.
 
 ### Phase 3 — CLI tools
 1. `rfaUnpack.cc` / `rfaPack.cc` reproducing §2.4 exactly — **including the chatter strings**,

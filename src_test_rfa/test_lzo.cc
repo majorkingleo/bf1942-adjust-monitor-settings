@@ -6,6 +6,8 @@
 
 #include "test_lzo.h"
 
+#include "rfa/LzoCodec.h"
+
 #include "minilzo.h"
 
 #include <algorithm>
@@ -242,5 +244,88 @@ TestCasePtr test_lzo_decompressing_truncated_data_fails_cleanly()
 
 			const bool ok = lzo_decompress( truncated, original.size(), restored );
 			return !ok || restored != original;
+		} );
+}
+
+// ---------------------------------------------------------------------------
+// rfa::LzoCodec - the wrapper the library actually uses
+// ---------------------------------------------------------------------------
+
+TestCasePtr test_lzo_codec_available()
+{
+	return std::make_shared<TestCaseFuncNoInp>(
+		"lzo_codec_available", true, []() { return rfa::LzoCodec::available(); } );
+}
+
+TestCasePtr test_lzo_codec_roundtrip_via_wrapper()
+{
+	return std::make_shared<TestCaseFuncNoInp>(
+		"lzo_codec_roundtrip_via_wrapper", true, []() {
+			rfa::LzoCodec codec;
+
+			const std::size_t sizes[] = { 0, 1, 32768, 32769, 200000 };
+
+			for( std::size_t size : sizes ) {
+				const Buffer original = make_compressible( size );
+
+				std::vector<unsigned char> compressed;
+				if( !codec.compress( original.data(), original.size(), compressed ) ) {
+					return false;
+				}
+
+				std::vector<unsigned char> restored( size );
+				if( !rfa::LzoCodec::decompress( compressed.data(), compressed.size(),
+				                                 restored.data(), size ) ) {
+					return false;
+				}
+
+				if( restored != original ) {
+					return false;
+				}
+			}
+
+			return true;
+		} );
+}
+
+TestCasePtr test_lzo_codec_detects_size_mismatch()
+{
+	// The RFA reader hands the codec the uncompressedSize from the directory table. If
+	// the payload disagrees, the codec must refuse rather than hand back a short or
+	// over-long buffer - that is what stops a corrupt archive becoming a corrupt file.
+	return std::make_shared<TestCaseFuncNoInp>(
+		"lzo_codec_detects_size_mismatch", true, []() {
+			rfa::LzoCodec codec;
+			const Buffer original = make_compressible( 5000 );
+
+			std::vector<unsigned char> compressed;
+			if( !codec.compress( original.data(), original.size(), compressed ) ) {
+				return false;
+			}
+
+			std::vector<unsigned char> out( original.size() );
+
+			return !rfa::LzoCodec::decompress( compressed.data(), compressed.size(),
+			                                    out.data(), original.size() - 1 );
+		} );
+}
+
+TestCasePtr test_lzo_codec_max_compressed_size_is_sufficient()
+{
+	return std::make_shared<TestCaseFuncNoInp>(
+		"lzo_codec_max_compressed_size_is_sufficient", true, []() {
+			rfa::LzoCodec codec;
+
+			// incompressible input is the worst case, and the one where the result is
+			// legitimately LARGER than the input
+			const Buffer original = make_random( 65536, 7 );
+
+			std::vector<unsigned char> compressed;
+			if( !codec.compress( original.data(), original.size(), compressed ) ) {
+				return false;
+			}
+
+			return compressed.size() <= rfa::LzoCodec::max_compressed_size( original.size() )
+			    && compressed.size() > original.size();
 		} );
 }

@@ -23,4 +23,10 @@ TestCasePtr test_lzo_compressible_input_actually_shrinks();
 TestCasePtr test_lzo_single_run_encoding_matches_format_doc();
 TestCasePtr test_lzo_decompressing_truncated_data_fails_cleanly();
 
+// rfa::LzoCodec - the wrapper the library actually uses
+TestCasePtr test_lzo_codec_roundtrip_via_wrapper();
+TestCasePtr test_lzo_codec_detects_size_mismatch();
+TestCasePtr test_lzo_codec_max_compressed_size_is_sufficient();
+TestCasePtr test_lzo_codec_available();
+
 #endif /* SRC_TEST_RFA_TEST_LZO_H_ */

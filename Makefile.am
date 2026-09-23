@@ -117,6 +117,17 @@ AM_CPPFLAGS += -I$(top_srcdir)/third_party/minilzo
 
 noinst_LIBRARIES += testcommon/libtestcommon.a
 
+# core .rfa library: container reader/writer plus the codec wrapper.
+# It inherits AM_CPPFLAGS, which already carries -I third_party/minilzo.
+noinst_LIBRARIES += rfa/librfa.a
+
+rfa_librfa_a_SOURCES = \
+		rfa/RfaFormat.h \
+		rfa/LzoCodec.h \
+		rfa/LzoCodec.cc \
+		rfa/RfaArchive.h \
+		rfa/RfaArchive.cc
+
 # vendored third-party LZO1X codec (see third_party/minilzo/README.md).
 # It gets its own CPPFLAGS because AM_CPPFLAGS carries -std=c++20, which is not a
 # valid option for a C translation unit.
@@ -144,12 +155,17 @@ test_rfa_SOURCES = \
 		src_test_rfa/test_rfa.cc \
 		src_test_rfa/test_lzo.h \
 		src_test_rfa/test_lzo.cc \
+		src_test_rfa/test_rfa_archive.h \
+		src_test_rfa/test_rfa_archive.cc \
+		src_test_rfa/test_rfa_format.h \
+		src_test_rfa/test_rfa_format.cc \
 		src_test_rfa/test_testcommon.h \
 		src_test_rfa/test_testcommon.cc \
 		tools_config.h
 
 test_rfa_LDADD = \
 		testcommon/libtestcommon.a \
+		rfa/librfa.a \
 		third_party/minilzo/libminilzo.a \
 		cpputils/cpputilsshared/libcpputilsshared.a \
 		cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a
