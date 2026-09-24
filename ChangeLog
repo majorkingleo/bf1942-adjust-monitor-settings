@@ -1,3 +1,36 @@
+commit 301f47454101a47372fa2a8be37cccaabaa7d4f1
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 22:19:28 2026 +0200
+
+    autotools forcing readme file
+
+commit 8bc1dbfc3010e0694c7fcec4d11138a14e954d48
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 22:17:44 2026 +0200
+
+    Write README.md, describing every tool in the repository
+    
+    The old README was four paragraphs about adjust_monitor_settings, left over from
+    before the .rfa tools existed. It is now a README.md covering all five programs:
+    
+      adjust_monitor_settings   why it exists, what it writes into Video.con, and why it
+                                pauses even on the failure path
+      create_desktop_icons      the five shortcuts and what they launch
+      list_monitor_resolutions  the machine-readable output
+      rfaUnpack                 all four forms, ExtractToPath semantics, the deliberate
+                                -f fix and the deliberate exit-0 selection miss
+      rfaPack                   store vs -Compress vs --lzo-fast, and why -u is refused
+    
+    plus the two logging switches every program accepts, the build (and the four things
+    that are easy to break in this tree), what the test suite compares against, the
+    format in six lines for orientation, the layout table, and the verified status.
+    
+    Renaming it meant telling automake, twice: EXTRA_DIST now lists README.md, and
+    AM_INIT_AUTOMAKE switched to `foreign` strictness, because GNU strictness insists on
+    a file literally named README before it will generate anything.
+    
+    91 testcases still pass.
+
 commit 83997f6b684034f1d74855e850ecd33603a25bc8
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 22:11:58 2026 +0200

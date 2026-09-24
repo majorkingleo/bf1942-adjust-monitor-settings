@@ -17,6 +17,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace rfa;
@@ -754,7 +755,99 @@ TestCasePtr test_writer_is_deterministic_across_thread_counts()
 				return false;
 			}
 
-			return compare_archives( work.path( "t1.rfa" ), work.path( "t8.rfa" ), "threads 1 vs 8" );
+			if( !compare_archives( work.path( "t1.rfa" ), work.path( "t8.rfa" ), "threads 1 vs 8" ) ) {
+				return false;
+			}
+
+			// Same question for a tree that is ONE file with many chunks. The old file-count
+			// clamp gave this shape exactly one thread, so the parallel path went untested
+			// here; now it is the batch's flat chunk queue that has to stay order-independent.
+			work.write( "solo/only.bin", pseudo_random( 500000, 9 ) );
+
+			if( !build( work.path( "solo" ), "solo", work.path( "s1.rfa" ),
+			            CompressionPolicy::Compress, 1, &error ) ) {
+				return false;
+			}
+			if( !build( work.path( "solo" ), "solo", work.path( "s8.rfa" ),
+			            CompressionPolicy::Compress, 8, &error ) ) {
+				return false;
+			}
+
+			return compare_archives( work.path( "s1.rfa" ), work.path( "s8.rfa" ),
+			                        "single file, threads 1 vs 8" );
+		},
+		std::ios::out );
+}
+
+TestCasePtr test_writer_thread_budget_follows_chunk_count_not_file_count()
+{
+	// A wrong clamp still writes CORRECT archives - the old one produced bytes identical to
+	// the oracle while packing a one-file tree on a single thread - so no byte comparison can
+	// catch it. The budget is therefore pinned directly, which is why planned_threads() is
+	// public at all.
+	return std::make_shared<TestCaseFuncOneFile>(
+		"writer_thread_budget_follows_chunk_count_not_file_count",
+		[]( const std::string & ) {
+			unsigned hardware = std::thread::hardware_concurrency();
+			if( hardware == 0 ) {
+				hardware = 1;
+			}
+
+			std::vector<SourceFile> big( 1 );
+			big[0].name = "menu/big.bin";
+			big[0].path = "irrelevant";
+			big[0].size = 22900000;              // 700 chunks
+
+			WriteOptions options;
+			options.policy = CompressionPolicy::Compress;
+
+			// THE regression: one file must not mean one thread. The clamp used to be against
+			// the file count, so this tree got min(hardware, 1) = 1 and ran serially.
+			const unsigned wide = RfaWriter::planned_threads( big, options );
+			const unsigned capped = std::min( hardware, 64u );
+
+			if( wide != capped ) {
+				std::cout << "[rfa] a 700-chunk single-file tree planned " << wide << " threads, expected "
+				          << capped << "; the clamp is still counting files\n";
+				return false;
+			}
+
+			// One chunk is one worker, whatever the hardware offers.
+			std::vector<SourceFile> tiny = big;
+			tiny[0].size = 100;
+
+			if( RfaWriter::planned_threads( tiny, options ) != 1u ) {
+				std::cout << "[rfa] a single-chunk tree planned more than one thread\n";
+				return false;
+			}
+
+			// Store has no compression queue, so there is nothing to spread.
+			WriteOptions store;
+			store.policy = CompressionPolicy::Store;
+
+			if( RfaWriter::planned_threads( big, store ) != 1u ) {
+				std::cout << "[rfa] store policy planned more than one thread\n";
+				return false;
+			}
+
+			// An explicit request is honoured, and still capped by the chunk count.
+			WriteOptions limited;
+			limited.policy = CompressionPolicy::Compress;
+			limited.threads = 1;
+
+			if( RfaWriter::planned_threads( big, limited ) != 1u ) {
+				std::cout << "[rfa] --threads 1 was not honoured\n";
+				return false;
+			}
+
+			limited.threads = 3;
+
+			if( RfaWriter::planned_threads( big, limited ) != 3u ) {
+				std::cout << "[rfa] --threads 3 was not honoured\n";
+				return false;
+			}
+
+			return true;
 		},
 		std::ios::out );
 }

@@ -1031,3 +1031,79 @@ unchanged. The compressed bytes are **identical** at both levels (`1ADC6636…`)
 that matters - the flag is safe, just not a speedup. The runtime belongs to the match search and
 to reading 618 files, not to codegen. Kept because it costs nothing and helps the other tools in
 this repo, which are not codec-bound.
+
+### Finding 33 — the writer used ONE thread on a one-file tree (2026-09-24)
+
+The paragraph above predicted that "multi-threading should still leave us ahead of the
+single-threaded 2003 encoder". Measured, that was wrong by more than an order of magnitude in one
+direction, because the threading did not work at all in the case that mattered most.
+
+The writer clamped its worker budget against the number of **files**:
+
+```cpp
+const unsigned threads = effective_threads( options.threads, ordered.size() );
+```
+
+but the unit of work is the 32 KiB **chunk**. A tree holding one 22.9 MB file is 1 file and 700
+chunks, so it got `min(24, 1) = 1` and packed fully serially. The comment directly above that line
+read "the parallelism is per chunk, which is finer grained than per file anyway" — the clamp
+contradicted it. Two shapes proved the rule exactly (`cores == files`):
+
+| 22.9 MB as | files | chunks/file | threads chosen | cores used |
+|---|---|---|---|---|
+| one file | 1 | 700 | **1** | **0.99** |
+| two files | 2 | 350 | **2** | **1.97** |
+| 24 files | 24 | 30 | 24 | 8.85 |
+
+A second limit compounded it: the file loop was serial, so the width at any instant was the
+*current* file's chunk count. The shipping `menu` tree is 618 files, of which **541 are a single
+chunk** (2.53 MB of its 22.9 MB) — 87% of the files could feed at most one worker. Overall it ran
+at 3.52 of 24 cores, and the 8 files that *could* fill the pool are the only reason it was not 1.
+
+**Three fixes, all measured:**
+
+1. Clamp against the **total chunk count** (`RfaWriter::planned_threads`). The budget is a
+   performance property, not an output property — a wrong clamp still writes byte-identical
+   archives, so no byte comparison can catch it. It is therefore pinned directly by
+   `writer_thread_budget_follows_chunk_count_not_file_count`.
+2. **One codec pool for the whole archive.** `std::vector<LzoCodec> codecs( workers )` used to be
+   built inside the per-file encoder. LZO1X-999 needs a 448 KB work buffer
+   (`LZO1X_999_MEM_COMPRESS` = 458 752 B, value-initialised → a real `memset`), so the old code
+   allocated *and zeroed* ~470 MiB to produce a 22.9 MB archive, and spawned two threads for every
+   two-chunk file where they could not pay off. Reuse is safe because the compressor clears what
+   it needs on every call — already proven by one codec serving several chunks within one file.
+   This also explains a CPU-time spread of 0.64 / 1.31 / 1.80 s at a constant 0.37 s wall.
+3. **Batches with a flat chunk queue.** Files are read in batches of ≤ 64 MiB and the compression
+   work inside a batch is one queue of chunks across *all* its files, so 618 one-chunk files and
+   one 700-chunk file fill the pool equally well. A file larger than the budget becomes a batch of
+   its own — which is what we want. It bounds memory to one batch without a separate code path.
+
+**Before / after**, same bytes (22.9 MB), `-Compress`, median of 5, 12C/24T:
+
+| | before | after | |
+|---|---|---|---|
+| menu tree (618 files) | 0.373 s | **0.107 s** | 3.5× |
+| one file | 1.038 s | **0.084 s** | 12.4× |
+| 2 files | 0.530 s | **0.083 s** | 6.4× |
+| 24 files | 0.185 s | **0.084 s** | 2.2× |
+| 96 files | 0.345 s | **0.088 s** | 3.9× |
+| 24 files, cores used | 8.85 | **17.9** | |
+
+Every shape now lands at ~0.085 s and ~17.5 of 24 logical cores: the tree's shape has stopped
+mattering, which was the point. 17.5 of 24 logical is 146% of the 12 **physical** cores, so SMT
+is working; the ceiling is now memory bandwidth, not scheduling.
+
+**Verified at scale and against the oracle.** A synthetic 110.1 MB tree (550 files, 2 batches —
+the smallest tree that crosses a batch boundary):
+
+| | ours | `rfaPack.orig.exe` |
+|---|---|---|
+| wall | **0.420 s** | 10.003 s |
+| cpu | 7.469 s | 9.969 s |
+| cores | 17.77 | 1.00 |
+| archive | 39,743,227 B, SHA-256 `1E9E6474…` | **identical** |
+
+**23.8× faster**, byte-identical, and `bin\rfaUnpack.orig.exe` extracts it to 550/550 files with
+matching SHA-256. Our own CPU time is 25% *below* the 2003 tool's for the same bytes; that is
+compiler and implementation quality (vendored LZO 2.10 at `-O3` versus a 2003 build), not the
+threading, but it is a second independent reason the gap is this large.

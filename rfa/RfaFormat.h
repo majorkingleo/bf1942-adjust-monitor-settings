@@ -190,13 +190,17 @@ struct Entry
 };
 
 /// ceil(uncompressed_size / CHUNK_SIZE), minimum 1. An entry's chunkCount must equal this.
-inline std::uint32_t chunk_count_for( std::uint32_t uncompressed_size )
+///
+/// Takes a 64-bit size so that callers can use it as a work estimate - counting the chunks
+/// of a whole tree before reading any of it - without truncating a file larger than 4 GiB.
+/// The RESULT stays 32-bit because that is what the entry table stores.
+inline std::uint32_t chunk_count_for( std::uint64_t uncompressed_size )
 {
 	if( uncompressed_size == 0 ) {
 		return 1u;
 	}
 
-	return ( uncompressed_size + CHUNK_SIZE - 1u ) / CHUNK_SIZE;
+	return (std::uint32_t)( ( uncompressed_size + CHUNK_SIZE - 1u ) / CHUNK_SIZE );
 }
 
 } // namespace rfa

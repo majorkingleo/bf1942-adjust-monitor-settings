@@ -47,8 +47,13 @@ struct WriteOptions
 	/// the game can read it (finding 27) - opt in through `--lzo-fast`.
 	LzoVariant lzo = LzoVariant::Era;
 
-	/// Worker threads used to compress the chunks of one file. 0 means
-	/// std::thread::hardware_concurrency().
+	/// Worker threads used to compress chunks. 0 means std::thread::hardware_concurrency().
+	///
+	/// Clamped to the archive's total chunk count and to 64. Note the clamp is by CHUNKS, not
+	/// by files: the unit of work is the 32 KiB chunk, and a tree holding one 22.9 MB file is
+	/// 1 file but 700 chunks. Clamping by files reduced that tree to a single thread and
+	/// packed it at 0.99 of 24 cores (finding 33). Ignored for Store, which has no
+	/// compression queue.
 	unsigned threads = 0;
 };
 
@@ -102,7 +107,28 @@ public:
 	                           std::string * error = nullptr );
 
 	/**
+	 * Worker threads write() will use: `options.threads`, or the hardware concurrency when
+	 * that is 0, clamped to the archive's total chunk count and to 64. Returns 1 for
+	 * CompressionPolicy::Store.
+	 *
+	 * Exposed because this is a PERFORMANCE property, not an output property: a wrong clamp
+	 * still writes correct archives, so no byte comparison can catch it. The tests pin the
+	 * value directly instead.
+	 */
+	static unsigned planned_threads( const std::vector<SourceFile> & files,
+	                                 const WriteOptions & options );
+
+	/**
 	 * Write a new archive.
+	 *
+	 * Files are read and compressed in batches of at most 64 MiB of source data, and within a
+	 * batch the compression work is a flat queue of 32 KiB chunks over every file in it. That
+	 * keeps memory bounded without making the parallelism depend on the tree's shape: 618
+	 * small files and one 700-chunk file both fill the worker pool.
+	 *
+	 * Output does not depend on the thread count. Chunks are written to results indexed by
+	 * (file, chunk), never appended in completion order, and the entry table is assembled in
+	 * `files` order.
 	 *
 	 * Returns false and fills `error` on I/O failure. A partially written file is removed
 	 * rather than left behind, so a failed pack never leaves a half archive that looks

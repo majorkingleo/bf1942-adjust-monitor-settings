@@ -29,7 +29,26 @@ void append_u32( std::vector<unsigned char> & out, std::uint32_t value )
 	out.push_back( (unsigned char)( ( value >> 24 ) & 0xFF ) );
 }
 
-unsigned effective_threads( unsigned requested, std::size_t count )
+/// Hard ceiling on worker threads, so a pathological --threads cannot exhaust the process.
+constexpr unsigned MAX_WORKERS = 64u;
+
+/// A batch of files is grown until it holds this much source data, and is never split inside
+/// a file. It bounds the memory a batch holds; it is large enough that an entire ordinary
+/// tree (the shipping menu is 22.9 MB) is one batch, so the parallelism does not depend on
+/// where a batch boundary happens to fall.
+constexpr std::uint64_t BATCH_TARGET_BYTES = 64ull * 1024 * 1024;
+
+/**
+ * Worker threads to use: `requested`, or the hardware concurrency when that is 0, clamped to
+ * the work available and to MAX_WORKERS.
+ *
+ * `work_items` must be a count of CHUNKS, not of files. The unit of work is the 32 KiB
+ * chunk, and the two differ by orders of magnitude - a tree holding one 22.9 MB file is 1
+ * file but 700 chunks. Clamping by the file count, as this did until finding 33, gave that
+ * tree `threads = min(24, 1) = 1` and packed it fully serially: measured 0.99 of 24 cores,
+ * while the same bytes split over 24 files reached 8.9.
+ */
+unsigned effective_threads( unsigned requested, std::uint64_t work_items )
 {
 	unsigned hardware = std::thread::hardware_concurrency();
 	if( hardware == 0 ) {
@@ -37,7 +56,8 @@ unsigned effective_threads( unsigned requested, std::size_t count )
 	}
 
 	unsigned threads = requested ? requested : hardware;
-	threads = std::max( 1u, std::min( threads, (unsigned)std::min<std::size_t>( count, 64 ) ) );
+	threads = std::max( 1u, std::min( threads,
+	                                 (unsigned)std::min<std::uint64_t>( work_items, MAX_WORKERS ) ) );
 
 	return threads;
 }
@@ -127,77 +147,26 @@ struct EncodedEntry
 };
 
 /**
- * Encode one file into its data block.
+ * Assemble a chunked data block from already-compressed payloads: the chunk count, one
+ * 12-byte descriptor per chunk, then the payloads concatenated in order.
  *
- * Store policy: the file bytes ARE the block (no header). Compress policy: a chunk table
- * followed by one LZO1X stream per 32 KiB chunk.
+ * The descriptors repeat the chunking rule (32 KiB, last chunk short) rather than storing
+ * the input sizes, so a reader rebuilds them from the count alone. That is why this needs
+ * `source` - not to read it, only to know where the last chunk ends.
  *
- * Every chunk is compressed even when the result is larger than the input, which is what
- * rfaPack.exe does - a 1-byte file becomes a 5-byte chunk. Storing such a chunk verbatim
- * would be smaller, and the reader accepts it, but it would stop our archives from
- * matching the oracle byte for byte. That trade is deliberate.
+ * Every chunk is present even when compression made it larger than its input, which is what
+ * rfaPack.exe does: a 1-byte file becomes a 5-byte chunk. Storing such a chunk verbatim
+ * would be smaller and our reader would accept it, but it would stop the archive matching
+ * the oracle byte for byte. That trade is deliberate.
  */
-bool encode_entry( const SourceFile & file,
-                   CompressionPolicy policy,
-                   LzoVariant variant,
-                   unsigned threads,
-                   EncodedEntry & out,
-                   std::string * error )
+void build_chunked_block( const std::vector<unsigned char> & source,
+                          const std::vector<std::vector<unsigned char>> & payloads,
+                          EncodedEntry & out )
 {
-	std::vector<unsigned char> source;
+	const std::uint32_t chunk_count = (std::uint32_t)payloads.size();
+	const std::uint32_t header_size =
+		BLOCK_HEADER_SIZE + CHUNK_DESCRIPTOR_SIZE * ( chunk_count - 1 );
 
-	if( !read_file_bytes( file.path, source, error ) ) {
-		return false;
-	}
-
-	out.name = file.name;
-	out.uncompressed_size = (std::uint32_t)source.size();
-	out.block.clear();
-
-	if( policy == CompressionPolicy::Store ) {
-		out.stored_size = (std::uint32_t)source.size();
-		out.block = source;
-		return true;
-	}
-
-	const std::uint32_t chunk_count = chunk_count_for( out.uncompressed_size );
-	std::vector<std::vector<unsigned char>> payloads( chunk_count );
-
-	std::atomic<bool> failed( false );
-	std::string failure;
-
-	const unsigned workers = effective_threads( threads, chunk_count );
-	std::vector<LzoCodec> codecs( (std::size_t)workers );
-
-	parallel_for( chunk_count, workers, [&]( std::size_t index, unsigned worker ) {
-		if( failed.load() ) {
-			return;
-		}
-
-		const std::size_t begin = index * CHUNK_SIZE;
-		const std::size_t end = std::min<std::size_t>( begin + CHUNK_SIZE, source.size() );
-
-		std::vector<unsigned char> compressed;
-
-		if( !codecs[worker].compress( source.data() + begin, end - begin, compressed, variant ) ) {
-			if( !failed.exchange( true ) ) {
-				failure = "entry '" + file.name + "': chunk " + std::to_string( index )
-				        + " failed to compress";
-			}
-			return;
-		}
-
-		payloads[index] = std::move( compressed );
-	} );
-
-	if( failed.load() ) {
-		if( error ) {
-			*error = failure;
-		}
-		return false;
-	}
-
-	const std::uint32_t header_size = BLOCK_HEADER_SIZE + CHUNK_DESCRIPTOR_SIZE * ( chunk_count - 1 );
 	std::uint32_t total_compressed = 0;
 
 	for( const std::vector<unsigned char> & payload : payloads ) {
@@ -225,8 +194,6 @@ bool encode_entry( const SourceFile & file,
 	for( const std::vector<unsigned char> & payload : payloads ) {
 		out.block.insert( out.block.end(), payload.begin(), payload.end() );
 	}
-
-	return true;
 }
 
 /// ASCII-only case folding, to UPPERCASE. Non-ASCII bytes are left alone: the names in the
@@ -365,6 +332,23 @@ bool RfaWriter::collect_files( const std::string & root,
 	return true;
 }
 
+unsigned RfaWriter::planned_threads( const std::vector<SourceFile> & files,
+                                     const WriteOptions & options )
+{
+	// Store has no compression queue - the block IS the file - so there is nothing to spread.
+	if( options.policy != CompressionPolicy::Compress ) {
+		return 1u;
+	}
+
+	std::uint64_t chunks = 0;
+
+	for( const SourceFile & file : files ) {
+		chunks += chunk_count_for( file.size );
+	}
+
+	return effective_threads( options.threads, chunks );
+}
+
 bool RfaWriter::write( const std::vector<SourceFile> & files,
                        const std::string & archive_path,
                        const WriteOptions & options,
@@ -381,10 +365,20 @@ bool RfaWriter::write( const std::vector<SourceFile> & files,
 	// No re-sorting: the order supplied reaches the archive verbatim, and collect_files
 	// already produces rfaPack.exe's order.
 
-	// Compress chunks of one file at a time, so peak memory is one file plus its encoded
-	// block rather than the whole archive. The parallelism is per chunk, which is finer
-	// grained than per file anyway.
-	const unsigned threads = effective_threads( options.threads, std::max<std::size_t>( ordered.size(), 1 ) );
+	// --- worker budget ---------------------------------------------------------
+	//
+	// Clamped against the TOTAL chunk count, never against the file count. The unit of work
+	// is the 32 KiB chunk: a tree holding one 22.9 MB file is 1 file but 700 chunks, and
+	// clamping by files reduced it to a single thread (finding 33).
+	const unsigned workers = planned_threads( files, options );
+
+	// One compressor per worker, built once for the whole archive and reused by every batch.
+	// 999 needs a ~448 KB work buffer, and building these per FILE cost ~470 MiB of
+	// allocate-and-zero for the shipping 22.9 MB menu tree - more churn than the archive
+	// itself, and the likely cause of a CPU-time spread of 0.64 to 1.80 s at a constant
+	// 0.37 s wall. Reuse is safe: the compressor clears what it needs on every call, which
+	// is already proven by one codec serving several chunks within a file.
+	std::vector<LzoCodec> codecs( (std::size_t)workers );
 
 	const std::uint32_t version = options.policy == CompressionPolicy::Store ? VERSION_0 : VERSION_1;
 
@@ -441,31 +435,142 @@ bool RfaWriter::write( const std::vector<SourceFile> & files,
 
 	WriteResult summary;
 
-	for( const SourceFile * file : ordered ) {
-		EncodedEntry entry;
-		std::string entry_error;
+	// --- encode in batches -----------------------------------------------------
+	//
+	// A batch is a contiguous run of `ordered`, grown until it holds BATCH_TARGET_BYTES of
+	// source data and never split inside a file (a file's chunks share one source buffer).
+	// A file larger than the budget therefore becomes a batch of its own - which is what we
+	// want, because its chunks alone can fill the pool.
+	//
+	// Within a batch the work is a FLAT queue of chunks across all its files, so 618
+	// one-chunk files and one 700-chunk file fill the pool equally well. That is the whole
+	// point: a per-file queue gives a one-chunk file a single worker, and most files in a
+	// real tree are one chunk (541 of the shipping menu's 618).
+	std::size_t batch_begin = 0;
 
-		if( !encode_entry( *file, options.policy, options.lzo, threads, entry, &entry_error ) ) {
-			return abandon( entry_error );
-		}
+	while( batch_begin < ordered.size() ) {
+		std::size_t batch_end = batch_begin;
+		std::uint64_t batch_bytes = 0;
 
-		TableEntry row;
-		row.name = entry.name;
-		row.stored_size = entry.stored_size;
-		row.uncompressed_size = entry.uncompressed_size;
-		row.data_offset = (std::uint32_t)out.tellp();
-		table.push_back( std::move( row ) );
+		while( batch_end < ordered.size() ) {
+			batch_bytes += ordered[batch_end]->size;
+			++batch_end;
 
-		if( !entry.block.empty() ) {
-			out.write( (const char *)entry.block.data(), (std::streamsize)entry.block.size() );
-
-			if( !out ) {
-				return abandon( "write failed for '" + archive_path + "'" );
+			if( batch_bytes >= BATCH_TARGET_BYTES ) {
+				break;
 			}
 		}
 
-		summary.stored_bytes += entry.stored_size;
-		summary.uncompressed_bytes += entry.uncompressed_size;
+		const std::size_t batch_size = batch_end - batch_begin;
+
+		// --- read the batch ---
+		//
+		// Serial on purpose. Reading 22.9 MB costs 0.043 s against 0.37 s of compression, so
+		// spreading it would buy a few percent while forcing the failure path to be reported
+		// across threads, for an error that must abandon the archive.
+		std::vector<std::vector<unsigned char>> sources( batch_size );
+		std::string read_error;
+
+		for( std::size_t i = 0; i < batch_size; ++i ) {
+			if( !read_file_bytes( ordered[batch_begin + i]->path, sources[i], &read_error ) ) {
+				return abandon( read_error );
+			}
+		}
+
+		// --- compress every chunk of the batch, as one queue ---
+		std::vector<std::vector<std::vector<unsigned char>>> payloads;
+		std::atomic<bool> failed( false );
+		std::string failure;
+
+		if( options.policy == CompressionPolicy::Compress ) {
+			struct Job
+			{
+				std::size_t slot;      // index within the batch
+				std::uint32_t chunk;
+			};
+
+			std::vector<Job> jobs;
+			payloads.resize( batch_size );
+
+			for( std::size_t i = 0; i < batch_size; ++i ) {
+				const std::uint32_t count = chunk_count_for( (std::uint64_t)sources[i].size() );
+				payloads[i].resize( count );
+
+				for( std::uint32_t chunk = 0; chunk < count; ++chunk ) {
+					jobs.push_back( Job{ i, chunk } );
+				}
+			}
+
+			// Never spawn more threads than there are chunks to give them: a batch whose
+			// files are all one chunk would otherwise create a pool to hand out one job.
+			const unsigned width = (unsigned)std::min<std::size_t>( jobs.size(), workers );
+
+			parallel_for( jobs.size(), width, [&]( std::size_t index, unsigned worker ) {
+				if( failed.load() ) {
+					return;
+				}
+
+				const Job & job = jobs[index];
+				const std::vector<unsigned char> & source = sources[job.slot];
+				const std::size_t begin = (std::size_t)job.chunk * CHUNK_SIZE;
+				const std::size_t end = std::min<std::size_t>( begin + CHUNK_SIZE, source.size() );
+
+				std::vector<unsigned char> compressed;
+
+				if( !codecs[worker].compress( source.data() + begin, end - begin,
+				                              compressed, options.lzo ) ) {
+					if( !failed.exchange( true ) ) {
+						failure = "entry '" + ordered[batch_begin + job.slot]->name + "': chunk "
+						        + std::to_string( job.chunk ) + " failed to compress";
+					}
+					return;
+				}
+
+				payloads[job.slot][job.chunk] = std::move( compressed );
+			} );
+
+			if( failed.load() ) {
+				return abandon( failure );
+			}
+		}
+
+		// --- assemble each entry and append it, in order ---
+		for( std::size_t i = 0; i < batch_size; ++i ) {
+			EncodedEntry entry;
+			entry.name = ordered[batch_begin + i]->name;
+			entry.uncompressed_size = (std::uint32_t)sources[i].size();
+
+			if( options.policy == CompressionPolicy::Store ) {
+				entry.stored_size = (std::uint32_t)sources[i].size();
+				entry.block = std::move( sources[i] );   // the bytes ARE the block
+			} else {
+				build_chunked_block( sources[i], payloads[i], entry );
+
+				// Drop the source as we go, so a batch of large files is not held at full
+				// size until its end. The payloads are all that is still needed.
+				std::vector<unsigned char>().swap( sources[i] );
+			}
+
+			TableEntry row;
+			row.name = entry.name;
+			row.stored_size = entry.stored_size;
+			row.uncompressed_size = entry.uncompressed_size;
+			row.data_offset = (std::uint32_t)out.tellp();
+			table.push_back( std::move( row ) );
+
+			if( !entry.block.empty() ) {
+				out.write( (const char *)entry.block.data(), (std::streamsize)entry.block.size() );
+
+				if( !out ) {
+					return abandon( "write failed for '" + archive_path + "'" );
+				}
+			}
+
+			summary.stored_bytes += entry.stored_size;
+			summary.uncompressed_bytes += entry.uncompressed_size;
+		}
+
+		batch_begin = batch_end;
 	}
 
 	const std::uint64_t table_offset = (std::uint64_t)out.tellp();

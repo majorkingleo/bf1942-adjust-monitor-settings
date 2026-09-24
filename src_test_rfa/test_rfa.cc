@@ -124,6 +124,7 @@ TestCases make_test_cases()
 	test_cases.push_back( test_writer_orders_entries_like_the_oracle() );
 	test_cases.push_back( test_writer_orders_names_the_way_the_original_folds_them() );
 	test_cases.push_back( test_writer_is_deterministic_across_thread_counts() );
+	test_cases.push_back( test_writer_thread_budget_follows_chunk_count_not_file_count() );
 	test_cases.push_back( test_writer_missing_source_leaves_no_archive() );
 	test_cases.push_back( test_writer_matches_the_golden_store_archive_byte_for_byte() );
 	test_cases.push_back( test_writer_compress_archive_is_interchangeable_with_the_oracle() );
