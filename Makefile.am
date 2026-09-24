@@ -26,7 +26,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/cpputils/cpputilsshared/cpputilsformat \
 	-I$(top_srcdir)/src  \
 	-DNOWAMAS \
-	-std=c++20
+	-std=c++23
 
 noinst_LIBRARIES=\
 	libcommon/libcommon.a \
@@ -170,6 +170,7 @@ rfa_librfa_a_SOURCES = \
 		rfa/RfaStamp.h \
 		rfa/CpuCount.h \
 		rfa/CpuCount.cc \
+		rfa/ParallelFor.h \
 		rfa/LzoCodec.h \
 		rfa/LzoCodec.cc \
 		rfa/RfaArchive.h \

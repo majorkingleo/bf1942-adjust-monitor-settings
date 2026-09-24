@@ -74,7 +74,7 @@ C:\cygwin64\bin\bash.exe -lc "cd '<workspace>' && make"
   byte-for-byte in store mode and semantically in compress mode. Regenerate with
   `tools/rfa_golden_archives.py`. Tests never launch the oracle binaries themselves:
   `std::system` goes through cmd.exe, which mangles both forward-slash and absolute paths.
-* `AM_CPPFLAGS` contains `-std=c++20`, which is invalid for a C translation unit.
+* `AM_CPPFLAGS` contains `-std=c++23`, which is invalid for a C translation unit.
   Any `.c` file added to this tree needs its own per-target `CPPFLAGS`, as
   `third_party/lzo/liblzo.a` does.
 * `cpputils/io` is not part of `libcpputilsshared.a`; this tree builds it separately as
@@ -147,6 +147,8 @@ Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, an
 * `cpputils/` is a **git submodule** (`.gitmodules` is tracked and `git submodule status`
   resolves it) — do not add our own files inside it. Third-party code we vendor goes in
   `third_party/`.
+* Language standard is **C++23** (`-std=c++23` in `AM_CPPFLAGS`). Our own headers open with
+  `#pragma once` instead of include guards; `cpputils/` keeps whatever it already has.
 * Test harness lives in `testcommon/`; the monitor tools' shared code lives in `libcommon/`.
   `AM_CPPFLAGS` carries `-I$(top_srcdir)/libcommon`, so each tool keeps its plain
   `#include "common.h"` from inside its own `src_<program>/` directory.

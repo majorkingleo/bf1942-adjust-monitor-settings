@@ -17,11 +17,15 @@
 
 #include "UnpackCli.h"
 
+#include "rfa/CpuCount.h"
+#include "rfa/ParallelFor.h"
 #include "rfa/RfaArchive.h"
 
 #include <CpputilsDebug.h>
 #include <format.h>
 
+#include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -101,6 +105,24 @@ Options parse( const std::vector<std::string> & args )
 /// The original documents ExtractToPath as optional but the golden never exercises the
 /// omitted case. "." is the reading that keeps the tool usable; anything else would mean
 /// refusing to run.
+/**
+ * Worker threads for extracting a whole archive: a third of the machine's CPUs.
+ *
+ * A fraction rather than all of them, because our threads are not what limits this. Measured
+ * with `examples/tmp_bench` on a 12-core/24-thread machine: creating files saturates at four
+ * concurrent writers (2.13x over a single thread at four, 2.07x at eight), so the ceiling is
+ * an external resource - the virus scanner's filter driver inspecting every new file, plus
+ * filesystem metadata - and further threads cannot buy more. Being past the plateau is
+ * harmless; being short of it is not, which is why this is derived rather than a constant.
+ *
+ * `usable_cpu_count()` is the LOGICAL count, so this lands at 8 on that machine rather than
+ * the 4 the measurement would pick for it.
+ */
+unsigned extraction_threads()
+{
+	return std::max( 1u, rfa::usable_cpu_count() / 3u );
+}
+
 std::string target_directory( const Options & options )
 {
 	if( options.has_extract_path && !options.extract_path.empty() ) {
@@ -324,29 +346,50 @@ int run_unpack( const std::vector<std::string> & args, std::ostream & out )
 
 	out << "unpackedSize_MB: " << ( archive.total_uncompressed_size() / ( 1024 * 1024 ) ) << "\n";
 
-	std::size_t extracted = 0;
-	std::size_t failed = 0;
+	const std::vector<rfa::Entry> & entries = archive.entries();
+	const unsigned threads = extraction_threads();
 
-	for( const rfa::Entry & entry : archive.entries() ) {
+	// One reader per worker. PayloadReader owns the archive's file handle precisely so that
+	// concurrent extraction needs no locking and no shared file position - see rfa/RfaArchive.h.
+	std::vector<rfa::PayloadReader> readers;
+	readers.reserve( threads );
 
-		if( write_entry( reader, target, entry, &error ) ) {
-			++extracted;
-			continue;
+	for( unsigned i = 0; i < threads; ++i ) {
+		readers.emplace_back( options.archive );
+	}
+
+	// `messages` is indexed by entry and each index is written by exactly one worker, so it
+	// needs no lock either. Printing it afterwards, in entry order, keeps stdout identical to
+	// what a serial run produced - which matters, because the golden files pin the chatter.
+	std::vector<std::string> messages( entries.size() );
+	std::atomic<std::size_t> extracted( 0 );
+	std::atomic<std::size_t> failed( 0 );
+
+	rfa::parallel_for( entries.size(), threads, [&]( std::size_t index, unsigned worker ) {
+		std::string entry_error;
+
+		if( write_entry( readers[worker], target, entries[index], &entry_error ) ) {
+			extracted.fetch_add( 1, std::memory_order_relaxed );
+			return;
 		}
 
-		++failed;
-		out << "  ERROR! Could not extract: " << entry.name << "\n"
-		    << "\t" << error << "\n";
+		failed.fetch_add( 1, std::memory_order_relaxed );
+		messages[index] = "  ERROR! Could not extract: " + entries[index].name + "\n\t"
+		                + entry_error + "\n";
+	} );
+
+	for( const std::string & message : messages ) {
+		out << message;
 	}
 
 	CPPDEBUG( Tools::format( "extracted %d of %d entries into '%s'",
-	                         static_cast<int>( extracted ),
-	                         static_cast<int>( archive.entries().size() ),
+	                         static_cast<int>( extracted.load() ),
+	                         static_cast<int>( entries.size() ),
 	                         target.c_str() ) );
 
 	// The original exits 0 even when it wrote nothing. A payload that cannot be read is a
 	// real failure, so it is reported as one.
-	return failed == 0 ? 0 : 1;
+	return failed.load() == 0 ? 0 : 1;
 }
 
 } // namespace cli

@@ -154,7 +154,7 @@ translate between the console encoding and UTF-8. Once `DetectLocale` is pulled 
 exists, and with `-static` the linker prefers it over `libiconv.dll.a`. Requirements:
 
 - **C++20 or newer.** `std::binary_semaphore`, `std::chrono::utc_clock`, `std::chrono::locate_zone`
-  and `std::format` are all used. (The reference uses `-std=gnu++23`, this repo `-std=c++20`.)
+  and `std::format` are all used. (The reference uses `-std=gnu++23`, this repo `-std=c++23`.)
 - `-static` on mingw, otherwise the binary wants `libstdc++-6.dll` at run time.
 - `tools_config.h` must stay in the repo root: `cpputils/io/DetectLocale.h` includes it as
   `"../../tools_config.h"`, and if that file defines `DISABLE_CPPUTILS_READFILE`, `DetectLocale` —
@@ -173,7 +173,7 @@ exists, and with `-static` the linker prefers it over `libiconv.dll.a`. Requirem
 | 6 | `detach()` without the quit/wait handshake | the last queued lines die with the process |
 | 7 | expecting `file:line` in the file backend | it prints basename + line, `prefix` is console-only, and `function` is captured in `Data` but never printed by either backend |
 | 8 | assuming a whole-second timestamp | `%S` prints the fractional part when the time point is finer than seconds, so the real line is `[2026-09-24 15:00:18.491]` and its width varies |
-| 9 | `-std=c++20` missing | `<semaphore>`, `utc_clock`, `std::format` unavailable |
+| 9 | `-std=c++23` missing | `<semaphore>`, `utc_clock`, `std::format` unavailable |
 
 ## Files
 

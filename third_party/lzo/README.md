@@ -34,7 +34,7 @@ They compile standalone: no `config.h`, no autotools. Two consequences for the b
 
 * the sources include their internal headers by plain name (`"lzo_conf.h"`, `"config1x.h"`), so
   `third_party/lzo/src` has to be on the include path along with `third_party/lzo/include`;
-* the target gets its own `CPPFLAGS`, because `AM_CPPFLAGS` carries `-std=c++20`, which is not a
+* the target gets its own `CPPFLAGS`, because `AM_CPPFLAGS` carries `-std=c++23`, which is not a
   valid option for a C translation unit.
 
 ## Not compatible with miniLZO

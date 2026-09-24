@@ -1,3 +1,36 @@
+commit 0637d832caf9f288c1e08c82f3627acaeb43e219
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 22:43:11 2026 +0200
+
+    Size the worker pool from the CPU count, not a constant 64
+    
+    MAX_WORKERS was an arbitrary 64, wrong in both directions: unreachable on a small machine,
+    where --threads 200 had to be cut down twice, and under-serving a large one. The ceiling is
+    now the number of CPUs this process may actually use.
+    
+    That number is not bare std::thread::hardware_concurrency(). That reports the CPUs the MACHINE
+    has, which is a different question: on Windows a machine with more than 64 processors reports
+    one processor group, and under taskset or a cgroup quota the machine has CPUs this process may
+    not touch. rfa/CpuCount.cc answers it from the process affinity mask on Windows and from
+    sched_getaffinity on Linux, falling back to sysconf and then to hardware_concurrency.
+    
+    Both platform paths are written now, for the Linux port. The Linux one sits behind a feature
+    test (CPU_SETSIZE && CPU_ISSET) rather than a platform test, and that is not cosmetic: written
+    as #if defined(__linux__) it failed to build on Cygwin, which ships <sched.h> with neither the
+    cpu_set_t API nor sched_getaffinity. With the feature test the file compiles there and takes
+    the sysconf path. The affinity branch itself could not be compiled here - this workspace has no
+    Linux toolchain - so it is written against the documented glibc interface and is the one thing
+    to re-check on the first Linux build.
+    
+    The budget is still clamped by the archive's total chunk count, so small trees are unaffected.
+    writer_thread_budget_follows_chunk_count_not_file_count now also asserts that asking for a
+    million threads returns exactly what asking for the default does - the check that fails if the
+    ceiling ever becomes a constant again - and that the count is never zero and never above what
+    the machine has.
+    
+    92 testcases pass. Store and compress output stay byte-identical to rfaPack.exe on the
+    618-entry menu tree (AB3C2B9E... / D6E928F8...).
+
 commit 4c947e47a8188231cfc67c07dfb83f43d6ddad03
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 22:34:43 2026 +0200

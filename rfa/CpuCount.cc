@@ -6,6 +6,7 @@
 
 #include "CpuCount.h"
 
+#include <bit>
 #include <thread>
 
 #if defined(_WIN32)
@@ -42,23 +43,7 @@ namespace rfa {
 
 namespace {
 
-#if defined(_WIN32)
-
-/// Population count over an affinity mask. There is no __builtin_popcount guarantee on the
-/// compilers this tree is built with, and the loop runs once per pack.
-unsigned count_set_bits( DWORD_PTR mask )
-{
-	unsigned count = 0;
-
-	while( mask != 0 ) {
-		count += (unsigned)( mask & 1u );
-		mask >>= 1;
-	}
-
-	return count;
-}
-
-#elif RFA_HAS_CPU_AFFINITY
+#if RFA_HAS_CPU_AFFINITY
 
 /// Count the CPUs an affinity mask allows. Returns 0 when the call fails, which the caller
 /// reads as "no answer" rather than "no CPUs" - the fallbacks behind it are the right answer.
@@ -101,7 +86,9 @@ unsigned usable_cpu_count()
 
 	if( GetProcessAffinityMask( GetCurrentProcess(), &process_mask, &system_mask )
 	    && process_mask != 0 ) {
-		return count_set_bits( process_mask );
+		// std::popcount rather than a hand-rolled shift loop: C++20 has it, and every target
+		// this builds for turns it into a POPCNT instruction.
+		return (unsigned)std::popcount( process_mask );
 	}
 
 	SYSTEM_INFO info;

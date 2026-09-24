@@ -330,7 +330,7 @@ See §10 for the full list.
    testcommon/libtestcommon.a`.
 4. ✅ Vendored miniLZO 2.10 into `third_party/minilzo/` (unmodified, plus `COPYING`) with
    a provenance README. It needs its own `CPPFLAGS` because `AM_CPPFLAGS` carries
-   `-std=c++20`, which is not valid for a C translation unit.
+   `-std=c++23`, which is not valid for a C translation unit.
 5. ✅ `./reconfigure.sh` re-run so `Makefile.in` knows the new targets (this required
    fixing the CRLF bug below).
 
@@ -586,7 +586,7 @@ Delivered: `testcommon/` (TestUtils, ColBuilder, TestRunner), `src_test_rfa/test
 |---|---|---|
 | 11 | `configure.ac` and `Makefile.am` were checked in with **CRLF** endings | `AC_CONFIG_FILES` entry became `"Makefile\r"`, so `configure` died with `cannot find input file`. Worse, the stray CR overwrote the error text in the terminal, making it near-unreadable. Fixed the files and added `.gitattributes` (`*.sh`, `*.ac`, `*.am` → `eol=lf`) so it cannot regress. |
 | 12 | `reconfigure.sh` was also CRLF | It failed outright under Cygwin (`$'\r': command not found`), which means the `reconfigure` task added in Phase 0 never worked. Fixed by the same change. |
-| 13 | `AM_CPPFLAGS` carries `-std=c++20` | Not valid for a C translation unit, so `minilzo.c` gets a per-target `CPPFLAGS` override. Any future `.c` file in this tree needs the same treatment. |
+| 13 | `AM_CPPFLAGS` carries `-std=c++23` | Not valid for a C translation unit, so `minilzo.c` gets a per-target `CPPFLAGS` override. Any future `.c` file in this tree needs the same treatment. |
 | 14 | Sizing a decompression buffer from the *compressed* size is wrong | Caught by the new suite, not by review: 33-byte-repeating input compresses well over 64x, so the guessed buffer was too small and `lzo1x_decompress_safe` returned `LZO_E_OUTPUT_OVERRUN`. The RFA reader always knows `uncompressedSize`, so it must use it. Recorded in `test_lzo.cc`. |
 
 Note that finding 14 is exactly the class of bug that silently corrupts archives in

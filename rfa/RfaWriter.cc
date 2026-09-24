@@ -8,6 +8,7 @@
 
 #include "CpuCount.h"
 #include "LzoCodec.h"
+#include "ParallelFor.h"
 #include "RfaStamp.h"
 
 #include <algorithm>
@@ -15,8 +16,6 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <functional>
-#include <thread>
 
 namespace rfa {
 
@@ -60,49 +59,6 @@ unsigned effective_threads( unsigned requested, std::uint64_t work_items )
 	                                 (unsigned)std::min<std::uint64_t>( work_items, cpus ) ) );
 
 	return threads;
-}
-
-/**
- * Run fn(i, worker) for every i in [0, count), across `threads` workers.
- *
- * The worker id lets each thread keep its own LzoCodec, since the compressor work buffer
- * is not shareable. Results are indexed by `i`, never appended in completion order, so
- * the output is identical no matter how the work interleaves.
- */
-void parallel_for( std::size_t count,
-                   unsigned threads,
-                   const std::function<void( std::size_t, unsigned )> & fn )
-{
-	if( count == 0 ) {
-		return;
-	}
-
-	if( threads <= 1 || count == 1 ) {
-		for( std::size_t i = 0; i < count; ++i ) {
-			fn( i, 0 );
-		}
-		return;
-	}
-
-	std::atomic<std::size_t> next( 0 );
-	std::vector<std::thread> pool;
-	pool.reserve( threads );
-
-	for( unsigned worker = 0; worker < threads; ++worker ) {
-		pool.emplace_back( [&, worker]() {
-			for( ;; ) {
-				const std::size_t i = next.fetch_add( 1 );
-				if( i >= count ) {
-					break;
-				}
-				fn( i, worker );
-			}
-		} );
-	}
-
-	for( std::thread & thread : pool ) {
-		thread.join();
-	}
 }
 
 bool read_file_bytes( const std::string & path, std::vector<unsigned char> & out, std::string * error )
