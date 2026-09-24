@@ -4,8 +4,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef RFA_RFAARCHIVE_H
-#define RFA_RFAARCHIVE_H
+#pragma once
 
 #include "RfaFormat.h"
 
@@ -101,4 +100,4 @@ private:
 
 } // namespace rfa
 
-#endif /* RFA_RFAARCHIVE_H */
+

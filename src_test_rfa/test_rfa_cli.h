@@ -4,8 +4,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef SRC_TEST_RFA_TEST_RFA_CLI_H_
-#define SRC_TEST_RFA_TEST_RFA_CLI_H_
+#pragma once
 
 #include "TestUtils.h"
 
@@ -30,4 +29,4 @@ TestCasePtr test_cli_pack_update_refuses_and_writes_nothing();
 TestCasePtr test_cli_pack_missing_source_directory_is_reported();
 TestCasePtr test_cli_pack_store_output_is_byte_identical_to_the_oracle_archive();
 
-#endif /* SRC_TEST_RFA_TEST_RFA_CLI_H_ */
+

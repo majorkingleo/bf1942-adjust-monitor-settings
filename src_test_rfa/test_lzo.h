@@ -8,8 +8,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef SRC_TEST_RFA_TEST_LZO_H_
-#define SRC_TEST_RFA_TEST_LZO_H_
+#pragma once
 
 #include "TestUtils.h"
 
@@ -31,4 +30,4 @@ TestCasePtr test_lzo_codec_available();
 TestCasePtr test_lzo_codec_era_variant_reproduces_the_archive_encoder();
 TestCasePtr test_lzo_codec_fast_variant_is_the_other_compressor();
 
-#endif /* SRC_TEST_RFA_TEST_LZO_H_ */
+

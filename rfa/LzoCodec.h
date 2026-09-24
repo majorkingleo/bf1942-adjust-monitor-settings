@@ -19,8 +19,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef RFA_LZOCODEC_H
-#define RFA_LZOCODEC_H
+#pragma once
 
 #include <cstddef>
 #include <vector>
@@ -75,4 +74,4 @@ private:
 
 } // namespace rfa
 
-#endif /* RFA_LZOCODEC_H */
+

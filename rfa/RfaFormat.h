@@ -12,8 +12,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef RFA_RFAFORMAT_H
-#define RFA_RFAFORMAT_H
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -205,4 +204,4 @@ inline std::uint32_t chunk_count_for( std::uint64_t uncompressed_size )
 
 } // namespace rfa
 
-#endif /* RFA_RFAFORMAT_H */
+

@@ -16,8 +16,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef RFA_RFAWRITER_H
-#define RFA_RFAWRITER_H
+#pragma once
 
 #include "LzoCodec.h"
 #include "RfaFormat.h"
@@ -144,4 +143,4 @@ public:
 
 } // namespace rfa
 
-#endif /* RFA_RFAWRITER_H */
+

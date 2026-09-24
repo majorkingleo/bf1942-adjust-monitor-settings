@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef SHORTCUTPROVIDER_H_
-#define SHORTCUTPROVIDER_H_
+#pragma once
 
 
 #include <Windows.h>
@@ -40,4 +39,4 @@ public:
 };
 
 
-#endif /* SHORTCUTPROVIDER_H_ */
+

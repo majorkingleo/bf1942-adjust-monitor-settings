@@ -13,8 +13,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef TESTCOMMON_TESTUTILS_H_
-#define TESTCOMMON_TESTUTILS_H_
+#pragma once
 
 #include <fstream>
 #include <functional>
@@ -161,4 +160,4 @@ public:
 typedef std::shared_ptr<TestCaseBase<bool>> TestCasePtr;
 typedef std::vector<TestCasePtr> TestCases;
 
-#endif /* TESTCOMMON_TESTUTILS_H_ */
+

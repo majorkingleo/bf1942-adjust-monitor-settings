@@ -7,8 +7,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef SRC_TEST_RFA_TEST_TESTCOMMON_H_
-#define SRC_TEST_RFA_TEST_TESTCOMMON_H_
+#pragma once
 
 #include "TestUtils.h"
 
@@ -28,4 +27,4 @@ TestCasePtr test_testcase_throws_exception_flag();
 TestCasePtr test_testcase_onefile_gets_name_from_testcase();
 TestCasePtr test_testcase_onefile_removes_stale_file();
 
-#endif /* SRC_TEST_RFA_TEST_TESTCOMMON_H_ */
+

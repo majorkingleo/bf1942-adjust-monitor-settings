@@ -27,8 +27,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef RFA_RFASTAMP_H
-#define RFA_RFASTAMP_H
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -65,5 +64,3 @@ inline constexpr std::size_t default_stamp_size()
 }
 
 } // namespace rfa
-
-#endif /* RFA_RFASTAMP_H */

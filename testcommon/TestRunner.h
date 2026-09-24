@@ -10,8 +10,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef TESTCOMMON_TESTRUNNER_H
-#define TESTCOMMON_TESTRUNNER_H
+#pragma once
 
 #include "TestUtils.h"
 
@@ -34,4 +33,4 @@ int run_testcases( int argc,
                    const std::string & component,
                    const TestCases & test_cases );
 
-#endif /* TESTCOMMON_TESTRUNNER_H */
+

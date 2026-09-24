@@ -4,8 +4,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef SRC_TEST_RFA_TEST_DEBUGLOG_H_
-#define SRC_TEST_RFA_TEST_DEBUGLOG_H_
+#pragma once
 
 #include "TestUtils.h"
 
@@ -21,4 +20,4 @@ TestCasePtr test_debuglog_second_session_appends();
 TestCasePtr test_debuglog_session_without_a_backend_writes_nothing();
 TestCasePtr test_debuglog_message_without_a_session_is_harmless();
 
-#endif /* SRC_TEST_RFA_TEST_DEBUGLOG_H_ */
+

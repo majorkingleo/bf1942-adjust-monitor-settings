@@ -1,5 +1,4 @@
-#ifndef TOOLS_CONFIG_H
-#define TOOLS_CONFIG_H
+#pragma once
 
 
 // #define TOOLS_USE_THREADS
@@ -10,5 +9,3 @@
 // #define TOOLS_USE_ORACLE
 
 // #define TOOLS_USE_GLOBAL_COUNT
-
-#endif

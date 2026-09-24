@@ -18,8 +18,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef RFA_CPUCOUNT_H
-#define RFA_CPUCOUNT_H
+#pragma once
 
 namespace rfa {
 
@@ -29,4 +28,4 @@ unsigned usable_cpu_count();
 
 } // namespace rfa
 
-#endif /* RFA_CPUCOUNT_H */
+

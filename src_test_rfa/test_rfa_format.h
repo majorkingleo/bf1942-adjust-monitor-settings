@@ -7,8 +7,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef SRC_TEST_RFA_TEST_RFA_FORMAT_H_
-#define SRC_TEST_RFA_TEST_RFA_FORMAT_H_
+#pragma once
 
 #include "TestUtils.h"
 
@@ -22,4 +21,4 @@ TestCasePtr test_format_entry_compressed_when_any_chunk_is_compressed();
 TestCasePtr test_format_total_compressed_size_sums_chunks();
 TestCasePtr test_format_variant_names();
 
-#endif /* SRC_TEST_RFA_TEST_RFA_FORMAT_H_ */
+

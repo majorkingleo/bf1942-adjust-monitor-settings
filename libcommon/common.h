@@ -5,12 +5,11 @@
  *      Author: Martin
  */
 
-#ifndef COMMON_H_
-#define COMMON_H_
+#pragma once
 
 #include <string>
 
 std::string get_user_profile( const std::string & bf_base_folder );
 
 
-#endif /* COMMON_H_ */
+

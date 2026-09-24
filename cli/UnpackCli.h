@@ -14,8 +14,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef CLI_UNPACKCLI_H
-#define CLI_UNPACKCLI_H
+#pragma once
 
 #include <iosfwd>
 #include <string>
@@ -36,4 +35,4 @@ int run_unpack( const std::vector<std::string> & args, std::ostream & out );
 
 } // namespace cli
 
-#endif /* CLI_UNPACKCLI_H */
+

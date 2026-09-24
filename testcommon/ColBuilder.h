@@ -9,8 +9,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef TESTCOMMON_COL_BUILDER_H
-#define TESTCOMMON_COL_BUILDER_H
+#pragma once
 
 #include <string>
 #include <vector>
@@ -70,4 +69,4 @@ protected:
 	static unsigned int count_visible_size( const std::string & str );
 };
 
-#endif /* TESTCOMMON_COL_BUILDER_H */
+

@@ -4,8 +4,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef SRC_TEST_RFA_TEST_RFA_ARCHIVE_H_
-#define SRC_TEST_RFA_TEST_RFA_ARCHIVE_H_
+#pragma once
 
 #include "TestUtils.h"
 
@@ -25,4 +24,4 @@ TestCasePtr test_archive_detects_garbage();
 TestCasePtr test_archive_detects_empty_file();
 TestCasePtr test_archive_unreadable_path_fails_cleanly();
 
-#endif /* SRC_TEST_RFA_TEST_RFA_ARCHIVE_H_ */
+

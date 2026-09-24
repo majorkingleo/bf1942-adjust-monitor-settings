@@ -21,8 +21,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef LIBCOMMON_DEBUGLOG_H_
-#define LIBCOMMON_DEBUGLOG_H_
+#pragma once
 
 #include <atomic>
 #include <memory>
@@ -90,4 +89,4 @@ private:
 
 } // namespace ToolLog
 
-#endif /* LIBCOMMON_DEBUGLOG_H_ */
+

@@ -8,8 +8,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef SRC_TEST_RFA_TEST_RFA_WRITER_H_
-#define SRC_TEST_RFA_TEST_RFA_WRITER_H_
+#pragma once
 
 #include "TestUtils.h"
 
@@ -27,4 +26,4 @@ TestCasePtr test_writer_missing_source_leaves_no_archive();
 TestCasePtr test_writer_matches_the_golden_store_archive_byte_for_byte();
 TestCasePtr test_writer_compress_archive_is_interchangeable_with_the_oracle();
 
-#endif /* SRC_TEST_RFA_TEST_RFA_WRITER_H_ */
+

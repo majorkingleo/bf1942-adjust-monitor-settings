@@ -1,3 +1,51 @@
+commit 640b8fa4c622b8c30cd65d834a2a7964b8d2f0dc
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 23:06:17 2026 +0200
+
+    Parallelise extraction, and move the tree to C++23
+    
+    Two changes that arrived together because they both rest on the threading plumbing.
+    
+    **Extraction uses a pool now.** cli/UnpackCli.cc walked the entries in a plain for loop, one
+    file at a time, even though PayloadReader takes its own file handle precisely so that
+    concurrent extraction needs no locking. It now runs one reader per worker.
+    
+    The budget is a third of the machine's CPUs. A fraction rather than all of them, because our
+    threads are not what limits this: creating files saturates at around four concurrent writers.
+    Measured with examples/tmp_bench on a 12C/24T machine - 2000 files per run, median of 3 - a
+    tree gains 2.13x at four threads and 2.07x at eight, and a single flat directory only 1.38x.
+    The ceiling is external: the virus scanner's filter driver inspects every new file and the
+    filesystem updates metadata, so further threads cannot buy more. usable_cpu_count() is the
+    LOGICAL count, so this lands at 8 here rather than the 4 the measurement would pick for it -
+    past the plateau, and harmless.
+    
+    Measured on the shipping 618-entry menu tree, median of 5:
+    
+                          serial    parallel   RFA Pack 1.7
+      unpack -Compress    0.191 s   0.117 s    0.239 s     1.63x / 2.04x
+      unpack store        0.146 s   0.110 s    0.165 s     1.33x / 1.50x
+    
+    That is 2.14 cores of the 8 allowed, which is the file-creation plateau to the digit.
+    
+    stdout is unchanged. The loop prints nothing per successful entry, so error messages are
+    collected per entry index and printed in entry order afterwards instead of interleaving from
+    several threads; extracted/failed are atomics. The golden CLI comparisons still pass.
+    
+    **The threading helper moved out.** rfa/ParallelFor.h holds parallel_for, now shared by the
+    writer and the unpacker instead of living privately in RfaWriter.cc.
+    
+    **C++23.** -std=c++23 rather than -std=c++20, and the three places where that buys something
+    real are taken: parallel_for takes the callable as a template parameter instead of a
+    std::function (no type erasure, no indirect call per work item), it uses std::jthread so the
+    pool joins itself even if handing out work throws, and CpuCount.cc uses std::popcount instead
+    of a hand-rolled shift loop. Our own headers use #pragma once from here on.
+    
+    Store and compress output stay byte-identical to rfaPack.exe on the menu tree (AB3C2B9E... /
+    D6E928F8...), which is the check that matters when the compiler's standard changes. 92
+    testcases pass.
+    
+    Benchmarks live in examples/tmp_bench/ (gitignored, like the rest of examples/).
+
 commit 0637d832caf9f288c1e08c82f3627acaeb43e219
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 22:43:11 2026 +0200

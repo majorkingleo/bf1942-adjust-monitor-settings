@@ -8,8 +8,7 @@
  * @author Copyright (c) 2026
  */
 
-#ifndef CLI_PACKCLI_H
-#define CLI_PACKCLI_H
+#pragma once
 
 #include <iosfwd>
 #include <iostream>
@@ -37,4 +36,4 @@ int run_pack( const std::vector<std::string> & args, std::ostream & out,
 
 } // namespace cli
 
-#endif /* CLI_PACKCLI_H */
+
