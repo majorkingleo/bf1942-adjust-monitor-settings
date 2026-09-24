@@ -33,7 +33,10 @@ AC_DEFUN([LD_FLAGS_CHECK],
 
 
 AC_INIT(adjust_monitor_settings, 0.2)
-AM_INIT_AUTOMAKE([subdir-objects -Wall])
+
+# `foreign` rather than GNU strictness: the README is README.md here, and GNU strictness
+# insists on a plain `README` file existing before it will generate anything.
+AM_INIT_AUTOMAKE([foreign subdir-objects -Wall])
 
 
 AC_CANONICAL_HOST

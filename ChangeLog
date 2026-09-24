@@ -1,3 +1,44 @@
+commit 83997f6b684034f1d74855e850ecd33603a25bc8
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 22:11:58 2026 +0200
+
+    Compress with the encoder the archives actually use: LZO1X-999 level 8
+    
+    Finding 31 identified the encoder; this makes it the default. third_party/lzo/
+    replaces third_party/minilzo/ - five sources from LZO 2.10 plus their header
+    closure, which is what the linker pulls in for lzo1x_999_compress_level,
+    lzo1x_1_compress and lzo1x_decompress_safe. The README records why exactly those
+    five and why miniLZO had to go rather than sit alongside: the two define the same
+    symbols and minilzo.h refuses to compile next to LZO.
+    
+    Findings 17 and 27 both close. Measured on the shipping 618-entry menu tree:
+    
+        archive size   10,064,159 B  ->  7,963,020 B
+        SHA-256        0987E0D2...   ->  D6E928F8...  = the same file rfaPack.orig.exe writes
+        old tools      abort after 11 files  ->  618/618 files, zero errors
+    
+    So compress mode is now byte-identical to the oracle AND readable by the 2003
+    tools, and 21% smaller than what lzo1x_1 produced.
+    
+    --lzo-fast keeps LZO1X-1 reachable: ~3x faster per byte, ~21% larger, and its
+    streams are still not readable by RFA Pack 1.7 - so the finding 27 warning moved
+    from -Compress to that opt-in path, and the -Compress testcase now asserts the
+    quiet stderr the golden has.
+    
+    Tests: 91 testcases. lzo_codec_era_variant_reproduces_the_archive_encoder pins the
+    era stream for 200 bytes of "ab" (13 61 62 20 a5 04 00 11 00 00, where LZO1X-1
+    emits 29 bytes), which is the cheapest guard against the variant silently
+    changing; lzo_codec_fast_variant_is_the_other_compressor keeps the two apart.
+    
+    configure.ac defaults CFLAGS/CXXFLAGS to -g -O3 instead of autoconf's -g -O2. It
+    was measured first and the gain is nil - codec alone 1.06 s either way on the
+    22.9 MB tree, rfaPack -Compress 0.40 s either way, compressed bytes identical
+    (1ADC6636...) - so it is kept for the other tools in this repo, not for the codec.
+    The runtime belongs to the match search and to reading 618 files.
+    
+    Doc: AGENTS.md, the format skill reference, the plan (D4 amended, findings 17/27/31,
+    the switch record) and tests/data/README.md all stop claiming LZO1X-1.
+
 commit 2027b9321bd9b58083363b8259cb4b955743069e
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 22:00:12 2026 +0200

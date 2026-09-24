@@ -296,7 +296,7 @@ TESTS = test_rfa
 ACLOCAL_AMFLAGS = -I m4
 
 EXTRA_DIST = \
-	README \
+	README.md \
 	LICENSE 
 	
 	
