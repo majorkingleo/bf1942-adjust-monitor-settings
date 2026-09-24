@@ -4,23 +4,20 @@ bin_PROGRAMS=adjust_monitor_settings \
 
 adjust_monitor_settings_SOURCES=\
 		tools_config.h\
-		adjust_monitor_settings.cc \
-		common.cc \
-		common.h
+		src_adjust_monitor_settings/adjust_monitor_settings.cc
 		
 list_monitor_resolutions_SOURCES=\
 		tools_config.h\
-		list_monitor_resolutions.cc
+		src_list_monitor_resolutions/list_monitor_resolutions.cc
 				
 create_desktop_icons_SOURCES=\
 		tools_config.h \
-		create_desktop_icons.cc \
-		common.cc \
-		common.h \
-		ShortcutProvider.h \
-		ShortcutProvider.cc
+		src_create_desktop_icons/create_desktop_icons.cc \
+		src_create_desktop_icons/ShortcutProvider.h \
+		src_create_desktop_icons/ShortcutProvider.cc
 			  
 AM_CPPFLAGS = \
+	-I$(top_srcdir)/libcommon \
 	-I$(top_srcdir)/cpputils/cpputilsshared  \
 	-I$(top_srcdir)/cpputils/cpputilsshared/cpputilsformat \
 	-I$(top_srcdir)/src  \
@@ -28,6 +25,7 @@ AM_CPPFLAGS = \
 	-std=c++20
 
 noinst_LIBRARIES=\
+	libcommon/libcommon.a \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a 
 
@@ -76,15 +74,25 @@ cpputils_cpputilsshared_cpputilsformat_libcpputilsformat_a_SOURCES= \
 	cpputils/cpputilsshared/cpputilsformat/cwformat.h \
 	cpputils/cpputilsshared/cpputilsformat/cwformat.cc
 
+# Shared code of the monitor tools - currently get_user_profile().
+# Its directory is on the include path via AM_CPPFLAGS above, so the tools
+# can keep their plain #include "common.h" after moving into subdirectories.
+libcommon_libcommon_a_SOURCES = \
+		libcommon/common.h \
+		libcommon/common.cc
+
 adjust_monitor_settings_LDADD = \
+	libcommon/libcommon.a \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a 
 
 list_monitor_resolutions_LDADD = \
+	libcommon/libcommon.a \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a
 
 create_desktop_icons_LDADD = \
+	libcommon/libcommon.a \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a 
 
@@ -103,9 +111,9 @@ endif
 # ---------------------------------------------------------------------------
 # Test suite (make check)
 #
-# The harness lives in testcommon/, not common/, because common.cc and common.h
-# already exist at the top level for the monitor tools. One program aggregates every
-# subject, following the majorkingleo/cpputilstest layout.
+# The harness lives in testcommon/, not common/, because the monitor tools' shared code
+# lives in libcommon/. One program aggregates every subject, following the
+# majorkingleo/cpputilstest layout.
 #
 # NOTE: tests/data/ is intentionally NOT in EXTRA_DIST yet - the fixtures are 6 MB of
 # binaries, they are tracked in git, and nothing here runs `make dist`. Revisit if a

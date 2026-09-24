@@ -1,3 +1,48 @@
+commit 5013b24a837104a4ad570bb080d211c185ebd702
+Author: Martin Oberzalek <kingleo@gmx.at>
+Date:   Thu Sep 24 16:18:12 2026 +0200
+
+    Make the golden CLI oracle portable across machines
+    
+    tests/golden/oracle-cli.json was committed with the absolute paths of the machine
+    it was captured on, so --check could only ever pass on that one checkout, and the
+    repository carried a developer's drive letter and temp directory in every argv.
+    
+    * tools/rfa_golden.py - tokenise in a defined order: scratch root, then the named
+      substitutions, then the repo root, so a fixture path without a token of its own
+      still reduces to a {REPO_ROOT}-prefixed one. Also token out the
+      `rfa_file_name: A <- B` heap addresses as {ADDR}: that line is process layout,
+      not behaviour - it shifts with the size of the environment block, so it differs
+      between a Cygwin and a PowerShell invocation - and left in it would keep the
+      golden unreproducible everywhere but the shell it was captured from. {MS} and
+      {REPO_ROOT} documented as tokens.
+    * tools/rfa_oracle.py - refuse to run under a non-Windows interpreter. Cygwin's
+      Python hands the native oracle POSIX paths it cannot open, and the failure is
+      silent: rfaPack prints "TotalFiles: 0" and still exits 0, so a stray regenerate
+      would have committed empty golden files as a fresh baseline.
+    * tests/golden/oracle-cli.json - regenerated with the tokens; no absolute paths
+      remain.
+    * ChangeLog - catch up with the two preceding commits.
+    
+    make check stays green.
+
+commit 8ce996c3d4d8a7f72f5d6e91256abe643fcc8548
+Author: Martin Oberzalek <kingleo@gmx.at>
+Date:   Thu Sep 24 16:18:04 2026 +0200
+
+    Stop git from rewriting line endings in the golden fixture tree
+    
+    Two files of the writer fixture tree hold CRLF on purpose, and the committed
+    oracle archives were built from them, so their exact sizes are baked into the
+    byte comparison. With core.autocrlf=input - as set on this machine - git stripped
+    the CR on commit, which made our writer's output look two bytes short per file and
+    turned a passing comparison into a mystery.
+    
+    tests/data/golden/tree/** is now marked -text, which disables conversion in both
+    directions: the working tree keeps whatever bytes the fixture has, and so does the
+    repository. The two files are restored to CRLF, which is what they were when the
+    oracle archives were generated from them.
+
 commit 7be59609e5a9de62c2b11c89b896dd237c666ce5
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Wed Sep 23 14:47:49 2026 +0200

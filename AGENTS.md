@@ -8,6 +8,30 @@ cross-compiled for Windows with mingw from a Cygwin shell.
 Planned work: a command-line-compatible, multi-threaded reimplementation of the
 Battlefield 1942 `.rfa` tools (`rfaPack`, `rfaUnpack`). See `PLAN_rfa_tools.md`.
 
+## Layout
+
+One directory per subject. Binaries still land in the **repo root** — there are no `SUBDIRS`
+Makefiles, so `bin_PROGRAMS` links next to the top-level `Makefile`.
+
+| Directory | Contents |
+|---|---|
+| `libcommon/` | `libcommon.a` — shared code of the monitor tools (`common.cc`, `common.h`) |
+| `src_adjust_monitor_settings/` | `adjust_monitor_settings.cc` |
+| `src_create_desktop_icons/` | `create_desktop_icons.cc`, `ShortcutProvider.{h,cc}` |
+| `src_list_monitor_resolutions/` | `list_monitor_resolutions.cc` |
+| `rfa/` | `librfa.a` — `.rfa` container reader/writer plus the LZO1X wrapper |
+| `testcommon/` | harness library for `make check` |
+| `src_test_rfa/` | one `test_<subject>.{h,cc}` pair per subject |
+| `third_party/minilzo/` | vendored miniLZO (needs its own `CPPFLAGS`, see below) |
+
+`tools_config.h` must stay in the **repo root**. `cpputils/` headers reach it with
+`#include "../../../tools_config.h"`, which only resolves because the command line carries
+`-I$(top_srcdir)/cpputils/cpputilsshared/cpputilsformat` — one level deeper than
+`cpputilsshared/`, so the three `..` land exactly on the root. Moving the header or dropping
+that `-I` breaks `cppdir.cc` (and every other cpputils source including it) with
+`fatal error: ../../../tools_config.h: No such file or directory`. The `-I$(top_srcdir)/src`
+entry is a leftover from the upstream project and points at nothing.
+
 ## Build
 
 The build runs GNU make under Cygwin (`.vscode/tasks.json` → task `make`, default build task):
@@ -85,6 +109,9 @@ Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, an
 * `cpputils/` is a **git submodule** (`.gitmodules` is tracked and `git submodule status`
   resolves it) — do not add our own files inside it. Third-party code we vendor goes in
   `third_party/`.
-* Test harness lives in `testcommon/` (root-level `common.cc`/`common.h` already exist for the
-  monitor tools, so `common/` would be ambiguous).
+* Test harness lives in `testcommon/`; the monitor tools' shared code lives in `libcommon/`.
+  `AM_CPPFLAGS` carries `-I$(top_srcdir)/libcommon`, so each tool keeps its plain
+  `#include "common.h"` from inside its own `src_<program>/` directory.
+* One directory per subject: `src_<program>/` for a program, `lib<name>/` for a library.
+  New shared code goes into `libcommon/`, never into a program directory.
 * One `test_<subject>.{cc,h}` pair per subject in `src_test_*/`.

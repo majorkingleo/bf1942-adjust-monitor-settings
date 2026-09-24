@@ -237,8 +237,10 @@ Consequences for the reimplementation:
   Makefile.am  configure.ac  reconfigure.sh  tools_config.h
   cpputils/  (submodule there, vendored here)
   ```
-* **Collision to avoid:** this repo already has root-level `common.cc` / `common.h` for the
-  monitor tools. The new harness directory must be named differently → `testcommon/`.
+* **Collision to avoid (history):** the repo originally kept `common.cc` / `common.h` in its
+  root for the monitor tools, so the shared harness directory had to be named differently →
+  `testcommon/`. Those two files have since moved into `libcommon/` (`libcommon.a`);
+  `testcommon/` keeps its name.
 
 ---
 
@@ -246,6 +248,10 @@ Consequences for the reimplementation:
 
 ```
 bf1942-adjust-monitor-settings/
+  libcommon/                             <- shared code of the monitor tools (libcommon.a)
+  src_adjust_monitor_settings/           <- the three pre-existing tools,
+  src_create_desktop_icons/              <-   one directory per program
+  src_list_monitor_resolutions/
   rfa/                                   <- new core library (no CLI, unit-testable)
     RfaFormat.h                          // structs, constants, offsets
     RfaArchive.cc/.h                     // read: table parse + entry access (streaming)
@@ -254,8 +260,8 @@ bf1942-adjust-monitor-settings/
     ThreadPool.cc/.h                     // or reuse cpputils/thread
   third_party/minilzo/                   // vendored miniLZO: minilzo.c, minilzo.h, lzoconf.h
                                          //   deliberately NOT under cpputils/ - see note below
-  rfaPack.cc                             <- CLI program
-  rfaUnpack.cc                           <- CLI program
+  src_rfaPack/rfaPack.cc                 <- CLI program
+  src_rfaUnpack/rfaUnpack.cc             <- CLI program
   testcommon/                            <- cpputilstest-style harness
     TestUtils.cc/.h
     ColBuilder.cc/.h
@@ -270,6 +276,10 @@ bf1942-adjust-monitor-settings/
   .vscode/tasks.json                     // add make check / deploy tasks
   PLAN_rfa_tools.md                      // this file
 ```
+
+> **Note:** the monitor tools were reorganised into `src_<program>/` + `libcommon/` before
+> Phase 2 began. Follow that pattern: one `src_<name>/` directory per program, shared code in
+> a `lib<name>/` library, binaries still linked into the repo root (no `SUBDIRS` Makefiles).
 
 > **Why not `cpputils/`:** `cpputils` is a **git submodule** (`.gitmodules` is tracked and
 > `git submodule status` resolves it). Writing our files there would dirty the submodule,
