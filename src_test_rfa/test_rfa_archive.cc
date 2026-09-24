@@ -9,6 +9,7 @@
 #include "rfa/RfaArchive.h"
 
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -524,6 +525,153 @@ TestCasePtr test_archive_unreadable_path_fails_cleanly()
 			    && !error.empty()
 			    && archive.entries().empty();
 		} );
+}
+
+TestCasePtr test_archive_reads_a_chunk_that_compresses_to_its_own_length()
+{
+	// Finding 30: a chunk can be an LZO1X stream even when compressedSize ==
+	// uncompressedSize, so the size comparison cannot decide on its own. Found on the
+	// shipping Battle_of_Britain.rfa, where our reader returned the COMPRESSED bytes as
+	// file content - silently, because the length was right.
+	//
+	// The payload below is that entry, copied out of the archive byte for byte, together
+	// with the content the original tool extracts from it. Reproducing the trap with the
+	// real bytes beats inventing a stream: a synthetic one would only prove what miniLZO
+	// does with input we chose.
+	//
+	//   Bf1942/Levels/Battle_of_Britain/Objects/Willy/Willy.con
+	//   data block: chunkCount 1, compressed 30, uncompressed 30, payloadOffset 0
+	//   payload   : 1e 72 75 ... 11 00 00   (an LZO1X stream, 30 bytes)
+	//   content   : "run objects\r\nrun weapons\r\n\r\n\r\n"   (30 bytes)
+	return std::make_shared<TestCaseFuncOneFile>(
+		"archive_reads_a_chunk_that_compresses_to_its_own_length",
+		[]( const std::string & file ) {
+			static const unsigned char payload[] = {
+				0x1E, 'r', 'u', 'n', ' ', 'o', 'b', 'j', 'e', 'c', 't', 's', 0x0D, 0x0A,
+				0x70, 0x01, 0x03, 'w', 'e', 'a', 'p', 'o', 'n',
+				0x50, 0x01, 0x64, 0x00, 0x11, 0x00, 0x00
+			};
+
+			const std::string expected = "run objects\r\nrun weapons\r\n\r\n\r\n";
+			const std::string name     = "Bf1942/Levels/Battle_of_Britain/Objects/Willy/Willy.con";
+
+			static_assert( sizeof( payload ) == 30, "the payload must be the measured 30 bytes" );
+
+			if( expected.size() != sizeof( payload ) ) {
+				std::cout << "[rfa] the fixture is inconsistent: content is "
+				          << expected.size() << " bytes, the stream is " << sizeof( payload ) << "\n";
+				return false;
+			}
+
+			// --- build a one-entry version-1 archive around it ------------------
+			const std::uint32_t reserved = 148;
+			const std::uint32_t data_offset = MIN_DATA_OFFSET + reserved;
+			const std::uint32_t block_size = BLOCK_HEADER_SIZE + (std::uint32_t)sizeof( payload );
+			const std::uint32_t toc_offset = data_offset + block_size;
+
+			std::vector<unsigned char> archive( toc_offset, 0 );
+
+			const auto put_u32 = []( std::vector<unsigned char> & into, std::uint32_t value ) {
+				into.push_back( (unsigned char)( value & 0xFF ) );
+				into.push_back( (unsigned char)( ( value >> 8 ) & 0xFF ) );
+				into.push_back( (unsigned char)( ( value >> 16 ) & 0xFF ) );
+				into.push_back( (unsigned char)( ( value >> 24 ) & 0xFF ) );
+			};
+
+			// header patched last
+			// data block at 156: chunkCount, then compressedSize/uncompressedSize/payloadOffset
+			std::size_t at = data_offset;
+			const std::uint32_t header_fields[] = {
+				1u, (std::uint32_t)sizeof( payload ), (std::uint32_t)sizeof( payload ), 0u
+			};
+
+			for( std::uint32_t value : header_fields ) {
+				for( int byte = 0; byte < 4; ++byte ) {
+					archive[at + byte] = (unsigned char)( ( value >> ( 8 * byte ) ) & 0xFF );
+				}
+				at += 4;
+			}
+
+			std::memcpy( archive.data() + data_offset + BLOCK_HEADER_SIZE, payload, sizeof( payload ) );
+
+			// directory table at toc_offset
+			std::vector<unsigned char> table;
+			put_u32( table, 1 );
+			put_u32( table, (std::uint32_t)name.size() );
+			table.insert( table.end(), name.begin(), name.end() );
+			put_u32( table, block_size );
+			put_u32( table, (std::uint32_t)sizeof( payload ) );
+			put_u32( table, data_offset );
+			put_u32( table, RFA_PACK_RESERVED1 );
+			put_u32( table, 0 );
+			put_u32( table, 0 );
+			put_u32( table, 0 );
+
+			archive.insert( archive.end(), table.begin(), table.end() );
+
+			// the 8-byte header
+			std::vector<unsigned char> head;
+			put_u32( head, toc_offset );
+			put_u32( head, VERSION_1 );
+
+			for( std::size_t i = 0; i < head.size(); ++i ) {
+				archive[i] = head[i];
+			}
+
+			write_whole_file( file, archive );
+
+			if( read_whole_file( file ).size() != archive.size() ) {
+				std::cout << "[rfa] could not write the synthetic archive\n";
+				return false;
+			}
+
+			// --- read it back ---------------------------------------------------
+			RfaArchive parsed;
+
+			if( !parsed.open( file ) ) {
+				std::cout << "[rfa] the synthetic archive did not open:";
+				for( const std::string & problem : parsed.problems() ) {
+					std::cout << "\n        " << problem;
+				}
+				std::cout << "\n";
+				return false;
+			}
+
+			const Entry * entry = parsed.find( name );
+
+			if( entry == nullptr ) {
+				std::cout << "[rfa] the entry is missing from the table\n";
+				return false;
+			}
+
+			// the trap itself: the sizes say "verbatim"
+			if( entry->chunks.size() != 1 || entry->chunks[0].is_compressed() ) {
+				std::cout << "[rfa] the fixture no longer reproduces the trap\n";
+				return false;
+			}
+
+			std::vector<unsigned char> content;
+			std::string error;
+			PayloadReader reader( parsed.path() );
+
+			if( !reader.read( *entry, content, &error ) ) {
+				std::cout << "[rfa] the reader refused the entry: " << error << "\n";
+				return false;
+			}
+
+			const std::string actual( content.begin(), content.end() );
+
+			if( actual != expected ) {
+				std::cout << "[rfa] the reader returned the wrong content; that it returned "
+				             "the compressed stream instead is exactly finding 30:\n";
+				std::cout << "        got  " << actual.size() << " bytes: " << actual << "\n";
+				std::cout << "        want " << expected.size() << " bytes: " << expected << "\n";
+				return false;
+			}
+
+			return true;
+		},
+		std::ios::out );
 }
 
 TestCasePtr test_archive_corrupt_payload_never_returns_pristine_bytes()

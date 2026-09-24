@@ -18,6 +18,7 @@ TestCasePtr test_archive_reader_expands_every_entry_to_declared_size();
 TestCasePtr test_archive_raw_entry_is_read_verbatim();
 TestCasePtr test_archive_find_returns_known_paths();
 TestCasePtr test_archive_conquest_con_matches_phase0_ground_truth();
+TestCasePtr test_archive_reads_a_chunk_that_compresses_to_its_own_length();
 TestCasePtr test_archive_corrupt_payload_never_returns_pristine_bytes();
 TestCasePtr test_archive_detects_truncated_file();
 TestCasePtr test_archive_detects_garbage();

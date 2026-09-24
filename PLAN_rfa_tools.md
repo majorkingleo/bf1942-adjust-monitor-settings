@@ -824,3 +824,89 @@ contains one (`tools/probe_case_ties.py`).
 **Fixed in:** `RfaWriter::name_less()` (uppercase folding, ASCII-only, documented fallback) and
 `test_writer_orders_names_the_way_the_original_folds_them`, whose tree contains all three
 discriminating pairs.
+
+### Finding 30 — equal sizes do NOT mean a chunk is stored verbatim (2026-09-24)
+
+Found by round-tripping the shipping `Battle_of_Britain.rfa` (46,644,201 B, 548 entries). Our
+extraction produced 548 files and **one of them was wrong**; the vendor tool's extraction of the
+same archive was right.
+
+```
+Bf1942/Levels/Battle_of_Britain/Objects/Willy/Willy.con    stored=46   uncompressed=30
+  chunk 0 : compressed=30   uncompressed=30   payloadOffset=0
+  block header : 01 00 00 00 1e 00 00 00 1e 00 00 00 00 00 00 00
+  payload      : 1e 72 75 6e 20 6f 62 6a 65 63 74 73 0d 0a 70 01 03 77 65 61 70 6f 6e
+                 50 01 64 00 11 00 00
+  content      : "run objects\r\nrun weapons\r\n\r\n\r\n"   <- what the original extracts
+  ours, before : those same 30 payload bytes, verbatim         <- silently wrong
+```
+
+`1e` is LZO1X's literal-run opcode for the 13 bytes that follow and `11 00 00` is its end
+marker: the payload is a stream that happens to compress to exactly the length of the file it
+produces. `Chunk::is_compressed()` compares the two sizes, so it said "verbatim" and
+`PayloadReader` handed the stream back as file content. The length was right, so nothing could
+notice it - no error, no failed size check, no structural problem. Only comparing the bytes
+against a second implementation showed it.
+
+**This retires a claim in `AGENTS.md`:** "a chunk is an LZO1X stream iff `compressedSize !=
+uncompressedSize`" holds in one direction only. Inequality still means compressed (and is still
+what catches LZO-*expanded* chunks that a less-than test misreads), but equality proves nothing.
+The sizes are a hint; the codec is the verdict.
+
+**Fix:** when the sizes are equal, `PayloadReader` tries LZO first and falls back to a verbatim
+copy when the codec refuses. Trusting `lzo1x_decompress_safe` in that direction is safe - it
+rejects anything that is not a stream and insists on producing exactly `uncompressedSize`
+bytes, so a wrong answer would require file content to be a valid LZO1X stream of its own,
+which the refusal we just handled proves it is not.
+
+**Verified:** re-extracting the same archive with the fixed reader now gives **548 of 548 files
+identical** to the vendor tool's extraction.
+
+**Pinned by** `test_rfa_archive`'s `archive_reads_a_chunk_that_compresses_to_its_own_length`,
+which builds a one-entry version-1 archive around the measured 30 bytes - no 46 MB fixture
+needed, and the testcase asserts that the sizes still say "verbatim" so it keeps testing the
+trap rather than a fixture that drifted.
+
+**Why the sweeps missed it.** `rfa_probe.py` validated 814 archives structurally (tables,
+offsets, sizes) and the suite checked that every fixture entry decompresses to its *declared
+size*. Neither looks at content. `menu.rfa` (618 entries) had matched the vendor tool entry for
+entry, so this chunk shape did not occur there; `Battle_of_Britain.rfa` is the first archive
+where it did. Same lesson as findings 1, 15, 16 and 28, one level down: it is not enough for a
+fixture to contain the case - the comparison has to be able to see it.
+
+### Phase 3, part 2: real archives, and the game — DONE (2026-09-24)
+
+The first validation against shipping archives rather than fixtures, and the first one that
+involved the engine. Everything below was produced from trees the **vendor tool** extracted, so
+the writer is judged without the reader's mistakes in the way (which is how finding 30 was
+found rather than baked in).
+
+| archive | entries | our store pack | against the vendor tool |
+|---|---|---|---|
+| `Battle_of_Britain.rfa` (base `Bf1942`) | 548 | 63,728,303 B | **byte-identical** to its store pack of the same tree, `00B4A9D9…`; it extracts 548/548 files back out, all identical |
+| FH `Battle_Of_Pavlov-1942.rfa` (base `bf1942`) | 251 | 12,079,164 B | **byte-identical**, `574E6840…`; 251/251 files back out, all identical |
+
+**And the game reads them.** Both repacked levels were installed in their mods and start: the
+front end comes up and the level archives load. That is the end-to-end check no unit test can
+make - the engine's own decoder accepting containers we wrote, on real levels.
+
+Timings on a 548-entry, 63.7 MB tree (median of 3, run interleaved with ours first so the
+original always has the warmer cache):
+
+| operation | ours | RFA Pack 1.7 | |
+|---|---|---|---|
+| unpack 46.6 MB → 548 files | 0.29 s | 0.43 s | 1.5× faster |
+| pack store (63.7 MB) | 0.09 s | 0.05 s | 1.8× slower |
+| pack compress | 0.26 s | 5.56 s | **21× faster** |
+
+The compress win is per-chunk parallelism over miniLZO against a single-threaded 2003 encoder.
+It is not free: our output is 8% larger on `Battle_of_Britain` (50,553,156 vs 46,644,201 B) and
+14% larger on Pavlov (6,839,603 vs 6,002,393 B), because `lzo1x_1` settles for weaker matches
+than the era encoder - and the era decoder rejects it outright (finding 27). Store mode is the
+interchangeable one, and it is the one that is byte-identical.
+
+**Also seen here:** the shipping `Battle_of_Britain.rfa` carries `flags = 0x028A0220` on every
+entry, while the FH archive carries `0x7C001CD8` and `0xFFFFFFFF`. §2.5's note that
+`0x028A0220` was a misreading of `0x7C001CD8` is therefore wrong - both values occur, in
+different archives. The field stays opaque, and the engine demonstrably loads our archives with
+it set to 0.

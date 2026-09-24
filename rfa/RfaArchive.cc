@@ -443,18 +443,18 @@ bool PayloadReader::read( const Entry & entry, std::vector<unsigned char> & out,
 		const Chunk & chunk = entry.chunks[i];
 		const std::uint64_t chunk_offset = payload_base + chunk.payload_offset;
 
-		if( chunk.is_compressed() ) {
-			compressed.resize( chunk.compressed_size );
+		compressed.resize( chunk.compressed_size );
 
-			if( !read_exact( file_, chunk_offset, compressed.data(), compressed.size() ) ) {
-				if( error ) {
-					*error = "entry '" + entry.name + "': cannot read chunk "
-					       + std::to_string( i ) + " of " + std::to_string( entry.chunks.size() );
-				}
-				out.clear();
-				return false;
+		if( !read_exact( file_, chunk_offset, compressed.data(), compressed.size() ) ) {
+			if( error ) {
+				*error = "entry '" + entry.name + "': cannot read chunk "
+				       + std::to_string( i ) + " of " + std::to_string( entry.chunks.size() );
 			}
+			out.clear();
+			return false;
+		}
 
+		if( chunk.is_compressed() ) {
 			if( !LzoCodec::decompress( compressed.data(),
 			                           chunk.compressed_size,
 			                           out.data() + written,
@@ -466,15 +466,20 @@ bool PayloadReader::read( const Entry & entry, std::vector<unsigned char> & out,
 				out.clear();
 				return false;
 			}
-		} else {
-			if( !read_exact( file_, chunk_offset, out.data() + written, chunk.uncompressed_size ) ) {
-				if( error ) {
-					*error = "entry '" + entry.name + "': cannot read stored chunk "
-					       + std::to_string( i );
-				}
-				out.clear();
-				return false;
-			}
+		} else if( !LzoCodec::decompress( compressed.data(),
+		                                  chunk.compressed_size,
+		                                  out.data() + written,
+		                                  chunk.uncompressed_size ) ) {
+			// Equal sizes usually mean "stored verbatim" - but not always, so the codec gets
+			// asked before the bytes are trusted as content (finding 30: the shipping
+			// Battle_of_Britain.rfa holds a 30-byte LZO1X stream for a 30-byte file).
+			//
+			// Letting lzo1x_decompress_safe answer is safe in this direction: it rejects
+			// anything that is not a stream, and it insists on producing exactly
+			// uncompressed_size bytes, so reading the compressed stream as file content would
+			// now require that content to be a valid LZO1X stream of its own - which the
+			// failure we just handled proves it is not.
+			std::memcpy( out.data() + written, compressed.data(), chunk.uncompressed_size );
 		}
 
 		written += chunk.uncompressed_size;

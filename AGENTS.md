@@ -111,9 +111,16 @@ Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, an
   * otherwise → the first u32 at `dataOffset` is a **chunk count**, followed by 12-byte
     chunk descriptors, then the concatenated per-chunk LZO1X payloads.
   Do not assume a constant `tag == 1` header — that mistake is invisible on small files.
-* A chunk is an **LZO1X stream iff `compressedSize != uncompressedSize`** — inequality,
-  not less-than. LZO1X often *expands* small or incompressible input (1 byte → 5), and a
-  less-than test misreads those chunks as verbatim, returning compressed bytes as content.
+* A chunk is an **LZO1X stream** unless the sizes prove otherwise. The size test is
+  **inequality** (`compressedSize != uncompressedSize`), not less-than: LZO1X often *expands*
+  small or incompressible input (1 byte → 5), and a less-than test reads those chunks as
+  verbatim, handing back compressed bytes as content. Inequality has a converse failure too,
+  though — LZO1X can compress a chunk into *exactly* as many bytes as it started with, and a
+  shipping archive does it (`Battle_of_Britain.rfa`, `Willy.con`: a 30-byte stream for a
+  30-byte file). So the sizes are a **hint**: when they are equal, the codec decides —
+  `PayloadReader` tries LZO first and copies verbatim only when it refuses, which is safe
+  because `lzo1x_decompress_safe` rejects non-streams and insists on the expected output
+  length. Finding 30.
 * `version` is `0` or `1` and does **not** select the payload layout; both occur, and
   235 raw entries live in version-1 archives. `rfaPack.exe` writes 0 without `-Compress`
   and 1 with it. A version-1 archive containing a raw non-empty entry makes the original

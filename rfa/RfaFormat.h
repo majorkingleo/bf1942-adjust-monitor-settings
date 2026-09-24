@@ -75,13 +75,21 @@ struct Chunk
 	/// Offset of this chunk's payload, relative to the start of the payload region.
 	std::uint32_t payload_offset = 0;
 
-	/// True when this chunk is an LZO1X stream rather than verbatim bytes.
+	/// True when the sizes say this chunk is an LZO1X stream rather than verbatim bytes.
 	///
 	/// The test is inequality, NOT "compressed_size < uncompressed_size". LZO1X output can
 	/// be LARGER than its input - a 1-byte file becomes a 5-byte chunk, and 32 KiB of
 	/// incompressible data grows slightly - so a less-than test misclassifies precisely the
-	/// incompressible chunks that the writer and the game produce. A verbatim chunk always
-	/// occupies exactly its uncompressed length, which is what makes equality correct.
+	/// incompressible chunks that the writer and the game produce.
+	///
+	/// ⚠️ **Equality does not prove the chunk is verbatim.** LZO1X can also compress a chunk
+	/// into exactly as many bytes as it started with. Measured on the shipping
+	/// `Battle_of_Britain.rfa`, whose `Objects/Willy/Willy.con` carries a 30-byte stream that
+	/// expands to the 30-byte file (finding 30). The sizes are therefore a HINT, not a
+	/// verdict: PayloadReader treats "equal" as "try the codec, then copy", and the writer
+	/// never has to care because it emits either all-raw or all-chunked entries.
+	/// `payload_is_compressed()` under-reports for the same reason - it is a diagnostic, not
+	/// a decision.
 	bool is_compressed() const { return compressed_size != uncompressed_size; }
 };
 

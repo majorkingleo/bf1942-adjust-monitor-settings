@@ -105,6 +105,7 @@ TestCases make_test_cases()
 	test_cases.push_back( test_archive_conquest_con_matches_phase0_ground_truth() );
 	test_cases.push_back( test_archive_raw_entry_is_read_verbatim() );
 	test_cases.push_back( test_archive_find_returns_known_paths() );
+	test_cases.push_back( test_archive_reads_a_chunk_that_compresses_to_its_own_length() );
 	test_cases.push_back( test_archive_corrupt_payload_never_returns_pristine_bytes() );
 	test_cases.push_back( test_archive_detects_truncated_file() );
 	test_cases.push_back( test_archive_detects_garbage() );
