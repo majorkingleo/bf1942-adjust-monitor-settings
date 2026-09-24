@@ -1111,3 +1111,40 @@ the smallest tree that crosses a batch boundary):
 matching SHA-256. Our own CPU time is 25% *below* the 2003 tool's for the same bytes; that is
 compiler and implementation quality (vendored LZO 2.10 at `-O3` versus a 2003 build), not the
 threading, but it is a second independent reason the gap is this large.
+
+### Finding 34 — a zero-byte entry is the one thing `-Compress` does not reproduce (2026-09-24)
+
+Found while writing the `rfa-tooling` skill, on the way to documenting "our `-Compress` output is
+byte-identical to the oracle's". That sentence is true for every tree tested so far (the 618-entry
+menu tree, the synthetic 110 MB tree) and **false for `tests/data/golden/tree`**, which contains a
+zero-length file. Attribution was direct: same tree, one file removed.
+
+| tree | ours | oracle | 2003 reader on ours |
+|---|---|---|---|
+| `tests/data/golden/tree` | 15942 B `C58BF87E…` | 15943 B `272419FE…` | `ERROR! CRASH  Decompression()!` |
+| the same tree minus `menu/empty.txt` | `D98B5BA8…` | `D98B5BA80B974BB430008C20BF560E32B8F6584AC1BAE83BD6F27CD1511C0985` | clean |
+
+The whole difference is that one entry. `tools/rfa_probe.py` shows its block as 20 bytes in the
+oracle and 19 in ours, every later `dataOffset` shifted by one, and no other differing line — the
+200000-byte blob in the same tree matches byte for byte, so this is not match selection. The bytes:
+
+```
+oracle  01 00 00 00 | 04 00 00 00 | (uncompressed 0) | 11 11 00 00
+ours    01 00 00 00 | 03 00 00 00 | (uncompressed 0) | 11 00 00
+        chunk count   compressed size
+```
+
+For a **zero-byte input** LZO 2.10's 999 emits 3 bytes where the 2003 encoder emits 4, so the
+chunk descriptor says 3 instead of 4.
+
+That makes finding 27's closure **conditional**: *"the shipped 2003 tools read our `-Compress`
+output"* holds only for trees without a zero-length entry. Add one and `rfaUnpack.orig.exe` prints
+`CRASH Decompression()!` — it still exits 0 and still extracts all 12 files, which is exactly why
+the finding was missed by the exit-code check. Whether the **game** is equally forgiving is not
+verified; empty files do occur in shipping archives, so this is worth closing.
+
+**The fix is one special case:** write the era's 4-byte payload (`11 11 00 00`) for a zero-length
+input instead of asking the codec. That makes even this tree byte-identical and removes the crash.
+Until then `scripts/verify.ps1` (in the `rfa-tooling` skill) reports it as a skip and
+`-Strict` fails, so the gap cannot be forgotten silently.
+

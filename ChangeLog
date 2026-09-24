@@ -1,3 +1,45 @@
+commit 7de71e861f159318d5e6df8abbcd3800819f2622
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 23:30:42 2026 +0200
+
+    Add --threads, so the worker count can be overridden
+    
+    Both programs now accept `--threads N`, `--threads=N`, `-j N` and `-jN`; the long form is
+    matched case-insensitively, like rfaPack's other switches. 0 is the default and keeps what
+    finding 33 and the extraction plateau settled on: the CPU count for packing, a third of it
+    for unpacking. Those counts do not change here - what changes is that measuring any other
+    trade-off no longer needs a rebuild.
+    
+    cli/ThreadSwitch.h is shared by the two command lines because the number is the easy part
+    and finding where it comes from is not: a separated value has to be CONSUMED by the parser.
+    Left in the argument list it becomes a positional, silently - the base folder name in
+    rfaPack, the extract directory in rfaUnpack - and a run that still looks plausible is
+    exactly the kind of divergence the two CLIs are kept in one library to prevent. So both
+    testcases put the switch in the MIDDLE of the command line and assert that the archive path
+    and the extract directory survive it, next to byte-identity across 0, 1, 2 and 4 workers.
+    
+    Three decisions worth writing down:
+    
+     - the line is printed only when the switch was given, so the chatter of every golden
+       scenario stays exactly as it was;
+     - it prints the EFFECTIVE count. Packing in store mode has no codec work to hand out, so it
+       reports 1 rather than echoing the request;
+     - a count that is not a number is refused on stdout, where rfaPack's other argument errors
+       go, so stderr keeps carrying the --lzo-fast warning and nothing else.
+    
+    Two failures, not one: a word after the switch is a typo, while a switch as the LAST argument
+    has no count at all - and reporting that one as `got '--threads'` names the wrong token. The
+    parse outcome is an enum rather than a `has_threads` flag plus a non-empty-string sentinel,
+    so each case can carry its own sentence.
+    
+    The first cut of parse_thread_count() parsed into a local and never wrote it back, so every
+    spelling fell through to the default while the error path worked correctly. That is why the
+    switch is asserted end to end here instead of through the parse helper alone.
+    
+    Verified: 94 testcases, 2 of them new. The 618-entry menu tree still packs to
+    D6E928F8DDFE9F36... (compress, 7963020 B) and AB3C2B9E72080914... (store, 22950118 B) at 0,
+    1, 2, 3, 5, 7 and 24 threads, and rfaUnpack restores identical bytes at 1 and 4.
+
 commit ef6edeb638bbf00a62431a03ede98b91d25dc592
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 23:09:47 2026 +0200

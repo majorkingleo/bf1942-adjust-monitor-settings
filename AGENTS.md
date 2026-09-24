@@ -93,9 +93,11 @@ Domain knowledge lives in `.github/skills/`:
 |---|---|
 | `rfa-unpack/` | unpack / selectively extract / repack `.rfa` archives; CLI contract for `rfaPack`/`rfaUnpack` |
 | `bf1942-standalone-map/` | RFA binary format (`references/rfa-format.md`) plus listing/assembly helper scripts |
+| `rfa-tooling/` | working **on** our reimplementation: `rfa/` + `cli/` internals, adding a switch, the proof obligations, `scripts/verify.ps1` |
 
-Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, and
-`bf1942-standalone-map/references/rfa-format.md` for the container layout.
+Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour,
+`bf1942-standalone-map/references/rfa-format.md` for the container layout, and
+`rfa-tooling/references/verification.md` before claiming that a change is compatible.
 
 ## Critical facts (verified — do not re-derive from the internet)
 
