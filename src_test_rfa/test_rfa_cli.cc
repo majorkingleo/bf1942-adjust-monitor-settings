@@ -961,3 +961,288 @@ TestCasePtr test_cli_pack_store_output_is_byte_identical_to_the_oracle_archive()
 		},
 		std::ios::out );
 }
+
+// ---------------------------------------------------------------------------
+// CLI: --threads, the one switch the original does not have
+//
+// Two properties have to hold, and neither one is covered by the byte comparison the rest of
+// this file leans on:
+//
+//  - the value must be CONSUMED, not left behind as a positional. `--threads 2` in the middle
+//    of a command line would otherwise turn "2" into the base folder name in rfaPack and into
+//    the extract directory in rfaUnpack - silently, and the run would still look plausible.
+//  - the count must not reach the archive. Two different worker counts have to produce the
+//    same bytes, or the switch is a correctness hazard rather than a performance knob.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Enough bytes for several 32 KiB chunks, so a count above 1 survives the work-item clamp.
+std::string multi_chunk_payload()
+{
+	std::string payload;
+
+	for( int i = 0; i < 4000; ++i ) {
+		payload += "Game.setNumberOfTickets 1 115; padding padding padding\r\n";
+	}
+
+	return payload;
+}
+
+std::vector<unsigned char> as_bytes( const std::string & text )
+{
+	return std::vector<unsigned char>( text.begin(), text.end() );
+}
+
+} // namespace
+
+TestCasePtr test_cli_threads_switch_is_honoured_and_does_not_become_a_positional()
+{
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_threads_switch_is_honoured_and_does_not_become_a_positional",
+		[]( const std::string & scratch_file ) {
+			Scratch work( scratch_file + ".threads" );
+
+			const std::string src = work.subdir( "src" );
+
+			if( !write_file( src + "/one.txt", multi_chunk_payload() ) ) {
+				return false;
+			}
+
+			int rc = 0;
+			std::string err;
+
+			// Without the switch the original's chatter must be untouched - that is why the
+			// line is printed only when the caller actually asked for a count.
+			const std::string plain =
+				run_pack( { "rfaPack.exe", src, "menu", work.path( "plain.rfa" ) }, rc, err );
+
+			if( rc != 0 || contains( plain, " Threads:" ) ) {
+				std::cout << "[rfa] packing without --threads changed the chatter:\n" << plain << "\n";
+				return false;
+			}
+
+			// The switch is placed in the MIDDLE on purpose: the archive path comes after it,
+			// so a value that was not consumed would take the archive's place.
+			const std::string middle = work.path( "middle.rfa" );
+
+			const std::string out =
+				run_pack( { "rfaPack.exe", src, "menu", "--threads", "2", middle, "-Compress" }, rc, err );
+
+			if( rc != 0 || !contains( out, " Threads: 2" ) ) {
+				std::cout << "[rfa] --threads 2 was not honoured:\n" << out << "\n" << err << "\n";
+				return false;
+			}
+
+			if( !std::filesystem::is_regular_file( middle ) ) {
+				std::cout << "[rfa] '2' took the archive path: no archive at " << middle << "\n";
+				return false;
+			}
+
+			// In store mode there is no codec work to hand out, so the echoed count collapses
+			// to 1 no matter what was asked for. Asserted rather than left implicit, because
+			// the line is user-visible: whoever reads " Threads: 1" after asking for 4 has to
+			// be looking at a truthful number.
+			const std::string store_out = run_pack(
+				{ "rfaPack.exe", src, "menu", work.path( "store.rfa" ), "--threads", "2" }, rc, err );
+
+			if( rc != 0 || !contains( store_out, " Threads: 1" ) ) {
+				std::cout << "[rfa] store mode did not report a serial run:\n" << store_out << "\n";
+				return false;
+			}
+
+			// The other three spellings have to mean the same thing.
+			struct Spelling
+			{
+				const char * name;
+				std::vector<std::string> args;
+			};
+
+			const std::vector<Spelling> spellings = {
+				{ "--threads=2", { "--threads=2" } },
+				{ "-j 2",        { "-j", "2" } },
+				{ "-j2",         { "-j2" } },
+				{ "--THREADS 2", { "--THREADS", "2" } },
+			};
+
+			for( const Spelling & spelling : spellings ) {
+				std::vector<std::string> args = { "rfaPack.exe", src, "menu" };
+				args.insert( args.end(), spelling.args.begin(), spelling.args.end() );
+				args.push_back( work.path( "spelling.rfa" ) );
+				args.push_back( "-Compress" );
+
+				const std::string spoken = run_pack( args, rc, err );
+
+				if( rc != 0 || !contains( spoken, " Threads: 2" ) ) {
+					std::cout << "[rfa] " << spelling.name << " was not honoured:\n"
+					          << spoken << "\n";
+					return false;
+				}
+			}
+
+			// A count that is not a number is an error, not a silent fallback to the default:
+			// a caller who asked for four threads and got twenty-four would never find out.
+			const std::string bad = work.path( "bad.rfa" );
+
+			const std::string bad_out =
+				run_pack( { "rfaPack.exe", src, "menu", bad, "--threads", "abc" }, rc, err );
+
+			if( rc != 1
+			    || !contains( bad_out, "Error! --threads needs a number, got 'abc'" )
+			    || std::filesystem::exists( bad ) ) {
+				std::cout << "[rfa] --threads abc was accepted:\n" << bad_out << "\n";
+				return false;
+			}
+
+			// The switch as the LAST argument has no count at all. That is a different
+			// mistake from a word, and it must not be reported as if "--threads" itself were
+			// the number that was typed.
+			const std::string trailing = work.path( "trailing.rfa" );
+
+			const std::string trailing_out =
+				run_pack( { "rfaPack.exe", src, "menu", trailing, "--threads" }, rc, err );
+
+			if( rc != 1
+			    || !contains( trailing_out, "but the switch is the last argument" )
+			    || contains( trailing_out, "got '--threads'" )
+			    || std::filesystem::exists( trailing ) ) {
+				std::cout << "[rfa] a trailing --threads was mishandled:\n" << trailing_out << "\n";
+				return false;
+			}
+
+			// An empty attached value is the same mistake as a word, not the same as a missing
+			// argument: there is a token, it just is not a number.
+			const std::string empty = work.path( "empty.rfa" );
+
+			const std::string empty_out =
+				run_pack( { "rfaPack.exe", src, "menu", empty, "--threads=" }, rc, err );
+
+			if( rc != 1
+			    || !contains( empty_out, "got '--threads='" )
+			    || std::filesystem::exists( empty ) ) {
+				std::cout << "[rfa] --threads= was mishandled:\n" << empty_out << "\n";
+				return false;
+			}
+
+			// And the same on the unpacking side, where a lost value becomes the extract
+			// directory. This also proves the switch does not disturb the extraction itself.
+			const std::string dest = work.path( "extracted" );
+			std::filesystem::create_directories( dest );
+
+			int urc = 0;
+			const std::string uout =
+				run( { "rfaUnpack.exe", middle, "--threads", "2", dest }, urc );
+
+			if( urc != 0 || !contains( uout, " Threads: 2" ) ) {
+				std::cout << "[rfa] --threads 2 was not honoured by rfaUnpack:\n" << uout << "\n";
+				return false;
+			}
+
+			if( !contains( uout, "strExtractPath: " + dest ) ) {
+				std::cout << "[rfa] '2' took the extract directory:\n" << uout << "\n";
+				return false;
+			}
+
+			// The archive names its entries "<base folder>/<relative path>", so the file is
+			// looked up through the tree rather than guessed at - the same way the other
+			// extraction testcases do it.
+			const std::vector<std::string> written = tree_files( dest );
+
+			if( written.size() != 1
+			    || read_whole_file( dest + "/" + written[0] ) != as_bytes( multi_chunk_payload() ) ) {
+				std::cout << "[rfa] the extraction under --threads produced other bytes\n";
+				return false;
+			}
+
+			const std::string ubad = work.path( "ubad" );
+			std::filesystem::create_directories( ubad );
+
+			const std::string ubad_out =
+				run( { "rfaUnpack.exe", middle, ubad, "--threads", "abc" }, urc );
+
+			return urc == 1
+			    && contains( ubad_out, "Error! --threads needs a number, got 'abc'" )
+			    && std::filesystem::is_empty( ubad );
+		},
+		std::ios::out );
+}
+
+TestCasePtr test_cli_threads_switch_does_not_change_the_archive()
+{
+	// The whole point of a worker count is that it is invisible in the result. Compress mode
+	// is used so that the threads really do run the codec, and the comparison is over the
+	// archive bytes rather than the chatter, because that is what a caller can observe.
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_threads_switch_does_not_change_the_archive",
+		[]( const std::string & scratch_file ) {
+			Scratch work( scratch_file + ".threads-bytes" );
+
+			const std::string src     = work.subdir( "src" );
+			const std::string payload = multi_chunk_payload();
+
+			if( !write_file( src + "/one.txt", payload ) ) {
+				return false;
+			}
+
+			int rc = 0;
+			std::string err;
+
+			// The reference is the run that does not mention threads at all.
+			const std::string reference = work.path( "reference.rfa" );
+
+			const std::string reference_out = run_pack(
+				{ "rfaPack.exe", src, "menu", reference, "-Compress" }, rc, err );
+
+			if( rc != 0 ) {
+				std::cout << "[rfa] the reference pack failed:\n" << reference_out << "\n";
+				return false;
+			}
+
+			const std::vector<unsigned char> reference_bytes = read_whole_file( reference );
+
+			if( reference_bytes.empty() ) {
+				return false;
+			}
+
+			for( const char * count : { "0", "1", "2", "4" } ) {
+				const std::string archive = work.path( std::string( "t" ) + count + ".rfa" );
+
+				const std::string out = run_pack(
+					{ "rfaPack.exe", src, "menu", archive, "-Compress", "--threads", count }, rc, err );
+
+				if( rc != 0 ) {
+					std::cout << "[rfa] --threads " << count << " failed:\n" << out << "\n";
+					return false;
+				}
+
+				if( read_whole_file( archive ) != reference_bytes ) {
+					std::cout << "[rfa] --threads " << count << " produced a different archive\n";
+					return false;
+				}
+			}
+
+			// The same claim on the reading side: the restored bytes must not depend on the
+			// number of readers either.
+			const std::vector<unsigned char> expected = as_bytes( payload );
+
+			for( const char * count : { "1", "4" } ) {
+				const std::string dest = work.path( std::string( "out" ) + count );
+				std::filesystem::create_directories( dest );
+
+				int urc = 0;
+				run( { "rfaUnpack.exe", reference, "--threads", count, dest }, urc );
+
+				const std::vector<std::string> written = tree_files( dest );
+
+				if( urc != 0
+				    || written.size() != 1
+				    || read_whole_file( dest + "/" + written[0] ) != expected ) {
+					std::cout << "[rfa] extraction under --threads " << count << " differs\n";
+					return false;
+				}
+			}
+
+			return true;
+		},
+		std::ios::out );
+}

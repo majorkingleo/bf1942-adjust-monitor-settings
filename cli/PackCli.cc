@@ -20,6 +20,8 @@
 
 #include "PackCli.h"
 
+#include "ThreadSwitch.h"
+
 #include "rfa/RfaWriter.h"
 
 #include <chrono>
@@ -66,6 +68,16 @@ struct Options
 	bool compress = false;
 	bool fast = false;
 
+	/// Worker threads asked for: 0 keeps the default, which is the machine's CPU count.
+	unsigned threads = 0;
+
+	/// How the --threads switch went, if it was there at all. Keeping the outcome rather than
+	/// a `has_threads` flag lets the two failures carry their own message.
+	ThreadSwitch thread_switch = ThreadSwitch::NotThreads;
+
+	/// Text that could not be read as a thread count, for the BadValue message.
+	std::string bad_threads;
+
 	/// The three positional arguments are all required; the switches are not.
 	bool complete = false;
 };
@@ -91,6 +103,29 @@ Options parse( const std::vector<std::string> & args )
 	for( std::size_t i = 1; i < args.size(); ++i ) {
 
 		const std::string lowered = lower( args[i] );
+
+		// --threads comes first: it may carry its value as the NEXT token, which must not then
+		// be taken for a positional argument - it would become the base folder name.
+		unsigned thread_value = options.threads;
+
+		switch( take_thread_switch( args, i, thread_value ) ) {
+			case ThreadSwitch::Accepted:
+				options.threads = thread_value;
+				options.thread_switch = ThreadSwitch::Accepted;
+				continue;
+
+			case ThreadSwitch::BadValue:
+				options.bad_threads = args[i];
+				options.thread_switch = ThreadSwitch::BadValue;
+				continue;
+
+			case ThreadSwitch::MissingValue:
+				options.thread_switch = ThreadSwitch::MissingValue;
+				continue;
+
+			case ThreadSwitch::NotThreads:
+				break;
+		}
 
 		// Switches are matched case-insensitively. The documented spellings are -u and
 		// -Compress; accepting -compress as well costs nothing and cannot break a caller
@@ -161,6 +196,20 @@ int run_pack( const std::vector<std::string> & args, std::ostream & out, std::os
 {
 	const Options options = parse( args );
 
+	// On stdout, like every other argument error of this program: stderr carries the
+	// --lzo-fast warning and nothing else, so a caller can still tell a warning from a
+	// refusal by the stream alone. A caller who asked for a specific count must not get
+	// some other count instead, which is why both cases stop the run.
+	if( options.thread_switch == ThreadSwitch::MissingValue ) {
+		out << "Error! --threads needs a number, but the switch is the last argument\n";
+		return 1;
+	}
+
+	if( options.thread_switch == ThreadSwitch::BadValue ) {
+		out << "Error! --threads needs a number, got '" << options.bad_threads << "'\n";
+		return 1;
+	}
+
 	if( !options.complete ) {
 		out << "ERROR! Not enough command line arguments\n"
 		    << USAGE_BLOCK << "\n"
@@ -206,6 +255,15 @@ int run_pack( const std::vector<std::string> & args, std::ostream & out, std::os
 	write_options.policy = options.compress ? rfa::CompressionPolicy::Compress
 	                                        : rfa::CompressionPolicy::Store;
 	write_options.lzo = options.fast ? rfa::LzoVariant::Fast : rfa::LzoVariant::Era;
+	write_options.threads = options.threads;
+
+	// Echoed only when the switch was used, so every captured golden keeps its exact stdout.
+	// The number printed is the EFFECTIVE one, which is clamped by the policy and the chunk
+	// count - for store mode it is always 1, and saying so is more useful than repeating the
+	// request back.
+	if( options.thread_switch == ThreadSwitch::Accepted ) {
+		out << " Threads: " << rfa::RfaWriter::planned_threads( files, write_options ) << "\n";
+	}
 
 	const auto started = std::chrono::steady_clock::now();
 

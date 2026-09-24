@@ -17,6 +17,8 @@
 
 #include "UnpackCli.h"
 
+#include "ThreadSwitch.h"
+
 #include "rfa/CpuCount.h"
 #include "rfa/ParallelFor.h"
 #include "rfa/RfaArchive.h"
@@ -58,6 +60,16 @@ struct Options
 
 	std::string list_path;       ///< -l
 	bool        has_list = false;
+
+	/// Worker threads asked for: 0 keeps the default, which is a third of the CPU count.
+	unsigned    threads = 0;
+
+	/// How the --threads switch went, if it was there at all. Keeping the outcome rather than
+	/// a `has_threads` flag lets the two failures carry their own message.
+	ThreadSwitch thread_switch = ThreadSwitch::NotThreads;
+
+	/// Text that could not be read as a thread count, for the BadValue message.
+	std::string bad_threads;
 };
 
 bool looks_like_switch( const std::string & token )
@@ -77,6 +89,29 @@ Options parse( const std::vector<std::string> & args )
 		if( !looks_like_switch( token ) ) {
 			positional.push_back( token );
 			continue;
+		}
+
+		// Before the -Xvalue handling below: --threads may carry its value as the NEXT token,
+		// and without consuming it here that number would be read as ExtractToPath.
+		unsigned thread_value = options.threads;
+
+		switch( take_thread_switch( args, i, thread_value ) ) {
+			case ThreadSwitch::Accepted:
+				options.threads = thread_value;
+				options.thread_switch = ThreadSwitch::Accepted;
+				continue;
+
+			case ThreadSwitch::BadValue:
+				options.bad_threads = args[i];
+				options.thread_switch = ThreadSwitch::BadValue;
+				continue;
+
+			case ThreadSwitch::MissingValue:
+				options.thread_switch = ThreadSwitch::MissingValue;
+				continue;
+
+			case ThreadSwitch::NotThreads:
+				break;
 		}
 
 		// Switches take their value attached, not separated: -i123, -lC:\list.lst.
@@ -117,9 +152,16 @@ Options parse( const std::vector<std::string> & args )
  *
  * `usable_cpu_count()` is the LOGICAL count, so this lands at 8 on that machine rather than
  * the 4 the measurement would pick for it.
+ *
+ * `requested` is `--threads N`. 0 keeps this default; anything else is taken as written, which
+ * is what makes a serial run reachable for benchmarking.
  */
-unsigned extraction_threads()
+unsigned extraction_threads( unsigned requested )
 {
+	if( requested != 0 ) {
+		return requested;
+	}
+
 	return std::max( 1u, rfa::usable_cpu_count() / 3u );
 }
 
@@ -236,6 +278,16 @@ int run_unpack( const std::vector<std::string> & args, std::ostream & out )
 {
 	const Options options = parse( args );
 
+	if( options.thread_switch == ThreadSwitch::MissingValue ) {
+		out << "Error! --threads needs a number, but the switch is the last argument\n";
+		return 1;
+	}
+
+	if( options.thread_switch == ThreadSwitch::BadValue ) {
+		out << "Error! --threads needs a number, got '" << options.bad_threads << "'\n";
+		return 1;
+	}
+
 	out << "|| .RFA UNPACK ||\n";
 
 	if( options.archive.empty() ) {
@@ -347,7 +399,12 @@ int run_unpack( const std::vector<std::string> & args, std::ostream & out )
 	out << "unpackedSize_MB: " << ( archive.total_uncompressed_size() / ( 1024 * 1024 ) ) << "\n";
 
 	const std::vector<rfa::Entry> & entries = archive.entries();
-	const unsigned threads = extraction_threads();
+	const unsigned threads = extraction_threads( options.threads );
+
+	// Echoed only when the switch was used, so the captured scenarios keep their exact stdout.
+	if( options.thread_switch == ThreadSwitch::Accepted ) {
+		out << " Threads: " << threads << "\n";
+	}
 
 	// One reader per worker. PayloadReader owns the archive's file handle precisely so that
 	// concurrent extraction needs no locking and no shared file position - see rfa/RfaArchive.h.

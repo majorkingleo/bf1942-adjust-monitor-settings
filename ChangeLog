@@ -1,3 +1,37 @@
+commit ef6edeb638bbf00a62431a03ede98b91d25dc592
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 23:09:47 2026 +0200
+
+    Use #pragma once in our own headers
+    
+    Mechanical, except for one part that is not: tools/rfa_stamp_gen.py WRITES rfa/RfaStamp.h, so
+    its template had to change too or the next regeneration would put the include guard back. The
+    script's own --check mode is what proves the two agree - it regenerates in memory and compares
+    against the committed header - and it is green, with a diff that shows nothing but the guard.
+    
+    22 headers, every one of them under our own directories:
+    
+      rfa/          CpuCount, LzoCodec, RfaArchive, RfaFormat, RfaStamp, RfaWriter
+                    (ParallelFor.h was converted with the C++23 change)
+      cli/          PackCli, UnpackCli
+      libcommon/    common, DebugLog (AsyncFileLogger and AsyncOutDebug already used pragma once)
+      testcommon/   ColBuilder, TestRunner, TestUtils
+      src_test_rfa/ test_debuglog, test_lzo, test_rfa_archive, test_rfa_cli, test_rfa_format,
+                    test_rfa_writer, test_testcommon
+      src_create_desktop_icons/ ShortcutProvider
+      tools_config.h
+    
+    cpputils/ and third_party/ are untouched, for the same reason: both are other people's code.
+    cpputils is a submodule, and third_party/lzo is vendored deliberately unmodified - its README
+    says so - so rewriting either would only create a diff to carry on every future sync.
+    
+    tools_config.h needed care. Its guard was closed by a bare #endif rather than the usual
+    `#endif /* TOOLS_CONFIG_H */`, so the second half of the edit did not match and the file was
+    left with an unmatched #endif. That would have failed the build outright; it was caught by
+    reading the file back instead.
+    
+    92 testcases pass.
+
 commit 640b8fa4c622b8c30cd65d834a2a7964b8d2f0dc
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 23:06:17 2026 +0200

@@ -29,4 +29,8 @@ TestCasePtr test_cli_pack_update_refuses_and_writes_nothing();
 TestCasePtr test_cli_pack_missing_source_directory_is_reported();
 TestCasePtr test_cli_pack_store_output_is_byte_identical_to_the_oracle_archive();
 
+// --threads, the one switch the original does not have (both programs)
+TestCasePtr test_cli_threads_switch_is_honoured_and_does_not_become_a_positional();
+TestCasePtr test_cli_threads_switch_does_not_change_the_archive();
+
 

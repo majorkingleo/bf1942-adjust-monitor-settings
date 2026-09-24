@@ -150,6 +150,10 @@ TestCases make_test_cases()
 	test_cases.push_back( test_cli_pack_missing_source_directory_is_reported() );
 	test_cases.push_back( test_cli_pack_store_output_is_byte_identical_to_the_oracle_archive() );
 
+	// --- CLI: --threads, both programs ------------------------------------
+	test_cases.push_back( test_cli_threads_switch_is_honoured_and_does_not_become_a_positional() );
+	test_cases.push_back( test_cli_threads_switch_does_not_change_the_archive() );
+
 	return test_cases;
 }
 

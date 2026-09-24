@@ -186,6 +186,7 @@ noinst_LIBRARIES += cli/libcli.a
 cli_libcli_a_SOURCES = \
 		cli/PackCli.h \
 		cli/PackCli.cc \
+		cli/ThreadSwitch.h \
 		cli/UnpackCli.h \
 		cli/UnpackCli.cc
 
