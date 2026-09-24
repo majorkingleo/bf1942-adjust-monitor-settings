@@ -381,7 +381,7 @@ runner's own failure paths were verified by hand (`-t 99` → exit 1, `--bogus` 
 | determinism: 1 vs 8 threads → identical bytes | ✅ |
 | **store-mode output byte-identical to `rfaPack.exe`** | ✅ **PASSES** — one comparison pins the stamp, first data offset (156), reserved field, version, table layout and entry order at once. Verified on the fixtures **and** on the real 618-entry vendor `menu.rfa` (finding 28) |
 | **an archive we wrote is really read by BF1942** | ✅ **PASSES** — our store pack installed as `Mods\bf1942\Archives\menu.rfa` brings `BF1942.exe +game bf1942` up to its **main menu**. The front end cannot start without that archive, so this is the engine itself accepting our container (finding 28) |
-| compress-mode output vs the oracle | ⚠️ **one-directional only** — see below and finding 27 |
+| compress-mode output vs the oracle | ⚠️ **one-directional only** — see below, findings 27 and 31. The cause is now known and reproducible: miniLZO's `lzo1x_1` is not the era encoder |
 
 **Compress-mode output is not byte-identical, and cannot be.** RFA Pack 1.7 embeds a
 2003-era LZO whose `lzo1x_1_compress` picks different — equally valid — matches than the
@@ -775,18 +775,14 @@ encoder emits **10 bytes** and miniLZO 2.10 emits **29**; over the whole `menu` 
 larger (10,064,159 vs 7,963,020 B). The `lzo1x_1` we vendor is not the encoder behind these
 archives.
 
-**Open question, deliberately not guessed at:** which LZO variant produces those streams. The
-era encoder's output for repetitive input uses the textbook long-match form
-(`13 61 62 20 a5 04 00 11 00 00` = 2 literals, then a 198-byte match at distance 2, then the end
-marker), so the candidate is a stronger variant of the same family — LZO1X-999 being the obvious
-one — not a different codec. Testing it needs LZO sources: there is no LZO library on this
-machine (`/usr/include/lzo`, `/usr/lib/liblzo*` and the mingw sysroot are all empty) and no
-Python LZO module, so it is a download-and-try task, and vendoring a second codec is a
-dependency decision belonging to D4 rather than to a probe.
-
-If it turns out to be LZO1X-999, compress mode becomes byte-identical to the oracle's **and**
-readable by the old tools — findings 17 and 27 both close. Until then: store mode is the
-interoperable one, compress mode is for the engine and for us.
+**Answered — see finding 31.** The encoder is LZO1X-999 at level 8, proven byte for byte
+against seven payloads from shipping archives. Which LZO variant produces those streams is no
+longer an open question, so the paragraph that used to sit here (there is no LZO library on
+this machine, testing it is a download-and-try task) is superseded by the answer plus the
+reproduction recipe in `tools/lzo_variant/README.md`. What remains is the decision whether to
+vendor it: with it, compress mode becomes byte-identical to the oracle's **and** readable by
+the old tools — findings 17 and 27 both close. Until then: store mode is the interoperable one,
+compress mode is for the engine and for us.
 
 ### Finding 28 — the original sorts entries by name, folded to UPPERCASE (2026-09-24)
 
@@ -966,3 +962,48 @@ entry, while the FH archive carries `0x7C001CD8` and `0xFFFFFFFF`. §2.5's note 
 `0x028A0220` was a misreading of `0x7C001CD8` is therefore wrong - both values occur, in
 different archives. The field stays opaque, and the engine demonstrably loads our archives with
 it set to 0.
+
+### Finding 31 — the codec is **LZO1X-999, level 8** (2026-09-24)
+
+Finding 27 left one question open: the era encoder's streams are reproducible, so *which* encoder
+produces them? It is the high-compression variant of the same codec, at a specific level, and the
+proof is byte-level on shipping archives rather than on synthetic input. Probe preserved in
+`tools/lzo_variant/` with a README carrying the reproduction recipe.
+
+1. `bin\rfaPack.orig.exe -Compress` reproduces the *shipping* payloads byte for byte — 618/618
+   entries of `menu.rfa`, 251/251 of the FH Pavlov archive — so one deterministic encoder made
+   them all. Its sizes matching the shipping file exactly was the first hint.
+2. It is not `lzo1x_1`: for 200 bytes of `ab` the era encoder emits **10 bytes**
+   (`13 61 62 20 a5 04 00 11 00 00`) where miniLZO emits **29**. On input that repetitive, that
+   gap is the difference between a strong match finder and a cheap one.
+3. Running every candidate the full LZO 2.10 library offers on that input, **only `lzo1x_999`**
+   produces those 10 bytes.
+4. Reproducing the archive's own layout — independent 32 KiB chunks, concatenated — its
+   **level-8** output for `menu/AirControlsPage1` is **SHA-256 identical** to the payload stored
+   in the shipping archive (`90D18D34…`, 4 886 bytes). Six further entries agree, 60 B to
+   20 049 B, single- and multi-chunk. Level 9 comes out two bytes smaller and level 7 larger on
+   the largest of them, which is what pins the level at 8 rather than "some 999".
+
+An earlier note in this plan suggested the era encoder might simply be a better `lzo1x_1`. It is
+not: the difference is the *variant*, worth 8–26% of archive size, and it is the reason the
+shipped tools mis-decode our output (finding 27).
+
+**Vendoring footprint, measured with `-Wl,-Map`:** linking `lzo1x_999_compress` together with
+`lzo1x_decompress_safe` pulls in five objects — `lzo_init.o`, `lzo1x_1.o`, `lzo1x_1o.o`,
+`lzo1x_9x.o`, `lzo1x_d2.o`. Decompression can stay with the miniLZO already vendored and tested,
+so a compression-only addition is the smaller change. LZO is GPLv2-or-later, the same licence
+family D4 already accepted for miniLZO, and D4's actual requirement — nothing inside
+`cpputils/` — is unaffected.
+
+**What it would change:**
+
+| | with `lzo1x_1` today | with `lzo1x_999` level 8 |
+|---|---|---|
+| our `menu` compress pack | 10,064,159 B | expected 7,963,020 B — the shipping size |
+| readable by `rfaUnpack.orig.exe` | no, it mis-decodes | yes: the streams are the ones that tool wrote itself |
+| findings 17 and 27 | open | both close together |
+
+**Costs, stated rather than discovered later:** 999 is far slower per byte than 1x, and its
+per-thread work memory is `LZO1X_999_MEM_COMPRESS` (~448 KB) instead of ~16 KB. Multi-threading
+should still leave us ahead of the single-threaded 2003 encoder, but the 21× margin measured for
+`lzo1x_1` will not survive.
