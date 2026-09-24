@@ -257,8 +257,12 @@ bool compare_archives( const std::string & ours, const std::string & theirs, con
  * Structural and payload comparison, for the case where the bytes legitimately differ.
  *
  * The two archives must agree on version, entry order, names, uncompressed sizes and the
- * opaque per-entry fields, and every entry must decompress to identical bytes. That is
- * what "interchangeable" means; it does not require identical compressed streams.
+ * opaque per-entry fields, and every entry must decompress to identical bytes. That does
+ * not require identical compressed streams.
+ *
+ * It also does NOT prove that the two are interchangeable, because both archives are read
+ * with our own reader. The original cannot read our compressed streams at all - see finding
+ * 27 in PLAN_rfa_tools.md - so "equal" here means "our reader accepts both", nothing more.
  */
 bool compare_archives_semantically( const std::string & ours,
                                     const std::string & theirs,
@@ -667,6 +671,67 @@ TestCasePtr test_writer_orders_entries_like_the_oracle()
 		std::ios::out );
 }
 
+TestCasePtr test_writer_orders_names_the_way_the_original_folds_them()
+{
+	// Finding 28: the original compares names in byte order after folding to UPPERCASE.
+	//
+	//   InGame / InfantryControlsPage1        -> Infantry… (byte order would say InGame)
+	//   Icon_PT_Mine.dds / icon_artillery.dds -> icon_art… (byte order would say Icon_PT…)
+	//   loading_full / loadingfull            -> loadingfull <- only this pair separates
+	//                                            uppercase folding from lowercase, because
+	//                                            '_' is 0x5F: above 'A', below 'a'
+	//
+	// Found by repacking the shipping menu.rfa: a byte comparison put 250 of 618 indices in
+	// a different order (1,003,071 differing bytes), and lowercase folding still left 68.
+	return std::make_shared<TestCaseFuncOneFile>(
+		"writer_orders_names_the_way_the_original_folds_them",
+		[]( const std::string & scratch ) {
+			Scratch work( scratch );
+
+			work.write( "menu/InGame", bytes( "b" ) );
+			work.write( "menu/InfantryControlsPage1", bytes( "a" ) );
+			work.write( "menu/InfantryControlsPage2", bytes( "c" ) );
+			work.write( "menu/Texture/Icon_PT_Mine.dds", bytes( "d" ) );
+			work.write( "menu/Texture/icon_artillery.dds", bytes( "e" ) );
+			work.write( "menu/Texture/loading_full_256x16.dds", bytes( "f" ) );
+			work.write( "menu/Texture/loadingfull_256x16.dds", bytes( "g" ) );
+
+			std::vector<SourceFile> files;
+			std::string error;
+
+			if( !RfaWriter::collect_files( work.path( "menu" ), "menu", files, &error ) ) {
+				std::cout << "[rfa] collect_files failed: " << error << "\n";
+				return false;
+			}
+
+			std::vector<std::string> names;
+			for( const SourceFile & file : files ) {
+				names.push_back( file.name );
+			}
+
+			const std::vector<std::string> expected = {
+				"menu/InfantryControlsPage1",
+				"menu/InfantryControlsPage2",
+				"menu/InGame",
+				"menu/Texture/icon_artillery.dds",
+				"menu/Texture/Icon_PT_Mine.dds",
+				"menu/Texture/loadingfull_256x16.dds",
+				"menu/Texture/loading_full_256x16.dds"
+			};
+
+			if( names != expected ) {
+				std::cout << "[rfa] entry order does not match the original's folding:\n";
+				for( const std::string & name : names ) {
+					std::cout << "        got " << name << "\n";
+				}
+				return false;
+			}
+
+			return true;
+		},
+		std::ios::out );
+}
+
 TestCasePtr test_writer_is_deterministic_across_thread_counts()
 {
 	// Thread scheduling must not influence the output, or archives become uncomparable.
@@ -757,9 +822,14 @@ TestCasePtr test_writer_compress_archive_is_interchangeable_with_the_oracle()
 {
 	// Deliberately NOT a byte comparison. RFA Pack 1.7 embeds a 2003-era LZO whose
 	// lzo1x_1_compress picks different (equally valid) matches than the miniLZO 2.10 we
-	// vendor, so the compressed streams differ while the archives stay interchangeable:
-	// same entries in the same order, same sizes, same opaque fields, and every payload
-	// decompresses to identical bytes.
+	// vendor, so the compressed streams differ: same entries in the same order, same sizes,
+	// same opaque fields, and every payload decompresses to identical bytes.
+	//
+	// The name is misleading and the comparison is weaker than it looks: both archives are
+	// read with OUR reader. Measured afterwards (finding 27): the original reports
+	// "ERROR! CRASH  Decompression()!" on every -Compress archive we write, so these two are
+	// not interchangeable in the direction that matters. Kept as a metadata and round-trip
+	// check, which is what it actually is.
 	return std::make_shared<TestCaseFuncOneFile>(
 		"writer_compress_archive_is_interchangeable_with_the_oracle",
 		[]( const std::string & scratch ) {

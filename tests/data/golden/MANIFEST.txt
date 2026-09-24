@@ -12,26 +12,47 @@ input tree:
   menu/empty.txt                0 bytes  sha256 E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
   menu/nested/deep.txt         20 bytes  sha256 1B7F40DE159BB988F87402F9CE7D247D5017DAE4E083B714783FEABF72A0B3DE
   menu/blob.bin            200000 bytes  sha256 100FD4BA97D5A35C9F1ABC7CC63933F9AE0A25DB184E9D823EF9B5CFC1C09370
+  menu/collation/InGame.txt        8 bytes  sha256 03A0BF91609BCF901065F97B324EBF0C0C35F4C34C7409ACA10C25901186828F
+  menu/collation/InfantryControlsPage1.txt       12 bytes  sha256 8065BCCE86E277538CDAD29BC2396936FF28075DCE1551B755917779E05DEA74
+  menu/collation/InfantryControlsPage2.txt       12 bytes  sha256 3CF795294B5D87DA4A53031E141BA855B1C6C3FBF11AD50548D9D20BB2809089
+  menu/collation/Icon_PT_Mine.txt        9 bytes  sha256 26FF49345572F26A80E35F0516DCE5B8692B5D345C2249DD428A1AD15A6811F7
+  menu/collation/icon_artillery.txt       16 bytes  sha256 DACF756488A1729DFD9AFC21228F372E268AAF7E91EA4E797CFD9139F9413A6D
+  menu/collation/loading_full.txt       14 bytes  sha256 76FEAA65913B0120C5F345B6018837A5D4632A6C89F8949111687321E4C6E5AC
+  menu/collation/loadingfull.txt       13 bytes  sha256 032CC70DBECD79EB2F0B4E3D4751FF4C5D01467BC0420CB0848F9ABBB8FD8C1B
 
-oracle-store.rfa       200451 bytes  sha256 172F87AE805EA36972EC13EB3858D2C6805413D56D60AD3674D069FAEFD07FD3
-oracle-compress.rfa     15258 bytes  sha256 8412921AA241A8A18A27ECE7EA3AA5025DFB124028F1F942262269A03C8B2A19
+oracle-store.rfa       200996 bytes  sha256 0B6CC31FA9018016BAA9D84E2D05B6BF2F500AC32DF669421011A4667D4F0EAC
+oracle-compress.rfa     15943 bytes  sha256 272419FEB4DD8D96A1E136BAF7F8EF4F91DEB1F996EA973C2D22A909DF954273
 
 structure:
   stores rfaPack.exe            <tree> menu <archive>
   stores rfaPack.exe -Compress  <tree> menu <archive>
 
 oracle-store.rfa:
-    version=0 entries=5 size=200451
+    version=0 entries=12 size=200996
     menu/menu/a.txt        stored=     31 unc=     31 dataOffset=   156 r1=1253856 flags=0x00000000 raw/empty
     menu/menu/blob.bin     stored= 200000 unc= 200000 dataOffset=   187 r1=1253856 flags=0x00000000 raw/empty
     menu/menu/empty.txt    stored=      0 unc=      0 dataOffset=200187 r1=1253856 flags=0x00000000 raw/empty
     menu/menu/tiny.txt     stored=      1 unc=      1 dataOffset=200187 r1=1253856 flags=0x00000000 raw/empty
-    menu/menu/nested/deep.txt stored=     20 unc=     20 dataOffset=200188 r1=1253856 flags=0x00000000 raw/empty
+    menu/menu/collation/icon_artillery.txt stored=     16 unc=     16 dataOffset=200188 r1=1253856 flags=0x00000000 raw/empty
+    menu/menu/collation/Icon_PT_Mine.txt stored=      9 unc=      9 dataOffset=200204 r1=1253856 flags=0x00000000 raw/empty
+    menu/menu/collation/InfantryControlsPage1.txt stored=     12 unc=     12 dataOffset=200213 r1=1253856 flags=0x00000000 raw/empty
+    menu/menu/collation/InfantryControlsPage2.txt stored=     12 unc=     12 dataOffset=200225 r1=1253856 flags=0x00000000 raw/empty
+    menu/menu/collation/InGame.txt stored=      8 unc=      8 dataOffset=200237 r1=1253856 flags=0x00000000 raw/empty
+    menu/menu/collation/loadingfull.txt stored=     13 unc=     13 dataOffset=200245 r1=1253856 flags=0x00000000 raw/empty
+    menu/menu/collation/loading_full.txt stored=     14 unc=     14 dataOffset=200258 r1=1253856 flags=0x00000000 raw/empty
+    menu/menu/nested/deep.txt stored=     20 unc=     20 dataOffset=200272 r1=1253856 flags=0x00000000 raw/empty
 
 oracle-compress.rfa:
-    version=1 entries=5 size=15258
+    version=1 entries=12 size=15943
     menu/menu/a.txt        stored=     51 unc=     31 dataOffset=   156 r1=1253856 flags=0x00000000 chunked(1)
     menu/menu/blob.bin     stored=  14727 unc= 200000 dataOffset=   207 r1=1253856 flags=0x00000000 chunked(7)
-    menu/menu/empty.txt    stored=     20 unc=      0 dataOffset= 14934 r1=1253856 flags=0x00000000 raw/empty
+    menu/menu/empty.txt    stored=     20 unc=      0 dataOffset= 14934 r1=1253856 flags=0x00000000 chunked(1)
     menu/menu/tiny.txt     stored=     21 unc=      1 dataOffset= 14954 r1=1253856 flags=0x00000000 chunked(1)
-    menu/menu/nested/deep.txt stored=     40 unc=     20 dataOffset= 14975 r1=1253856 flags=0x00000000 chunked(1)
+    menu/menu/collation/icon_artillery.txt stored=     36 unc=     16 dataOffset= 14975 r1=1253856 flags=0x00000000 chunked(1)
+    menu/menu/collation/Icon_PT_Mine.txt stored=     29 unc=      9 dataOffset= 15011 r1=1253856 flags=0x00000000 chunked(1)
+    menu/menu/collation/InfantryControlsPage1.txt stored=     32 unc=     12 dataOffset= 15040 r1=1253856 flags=0x00000000 chunked(1)
+    menu/menu/collation/InfantryControlsPage2.txt stored=     32 unc=     12 dataOffset= 15072 r1=1253856 flags=0x00000000 chunked(1)
+    menu/menu/collation/InGame.txt stored=     28 unc=      8 dataOffset= 15104 r1=1253856 flags=0x00000000 chunked(1)
+    menu/menu/collation/loadingfull.txt stored=     33 unc=     13 dataOffset= 15132 r1=1253856 flags=0x00000000 chunked(1)
+    menu/menu/collation/loading_full.txt stored=     34 unc=     14 dataOffset= 15165 r1=1253856 flags=0x00000000 chunked(1)
+    menu/menu/nested/deep.txt stored=     40 unc=     20 dataOffset= 15199 r1=1253856 flags=0x00000000 chunked(1)

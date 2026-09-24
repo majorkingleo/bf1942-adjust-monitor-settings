@@ -83,6 +83,11 @@ public:
 	 *
 	 * whereas ASCII-ascending order would put menu/z.txt last. Entry order reaches the
 	 * archive verbatim, so matching it is what makes byte-identical output possible.
+	 *
+	 * Names are compared in byte order after folding to **uppercase**, which a plain byte or
+	 * lowercase comparison gets wrong as soon as a directory holds siblings like `InGame` and
+	 * `InfantryControlsPage1`, or `loading_full` and `loadingfull` - see finding 28 in
+	 * PLAN_rfa_tools.md and name_less() in RfaWriter.cc for the measurement behind it.
 	 */
 	static bool collect_files( const std::string & root,
 	                           const std::string & base,

@@ -228,12 +228,69 @@ bool encode_entry( const SourceFile & file,
 	return true;
 }
 
+/// ASCII-only case folding, to UPPERCASE. Non-ASCII bytes are left alone: the names in the
+/// archives are ASCII, and folding them through a locale would make the order depend on the
+/// machine.
+///
+/// Uppercase, not lowercase, is the point. `_` folds to itself in both, but it sits at 0x5F,
+/// which is below `a` (0x61) and above `A` (0x41): folding down puts `loading_full` before
+/// `loadingfull`, folding up puts `loadingfull` first, and the original does the latter.
+inline char fold_ascii( char c )
+{
+	return ( c >= 'a' && c <= 'z' ) ? static_cast<char>( c - 'a' + 'A' ) : c;
+}
+
+/**
+ * rfaPack.exe's comparison for entry names within one directory: byte order after folding
+ * to **uppercase**.
+ *
+ * Measured, not guessed, on the shipping `menu.rfa` (618 entries). A plain byte comparison
+ * reproduced the same file size while putting 250 of 618 indices in a different order and
+ * differing in 1,003,071 bytes; folding to lowercase left 68 indices wrong. Three pairs
+ * pin the rule, and uppercase folding is the only one of the three candidates that orders
+ * all of them the original's way:
+ *
+ *   | pair | byte | lower | upper | original |
+ *   |---|---|---|---|---|
+ *   | `InGame` / `InfantryControlsPage1` | InGame | Infantry… | Infantry… | Infantry… |
+ *   | `Icon_PT_Mine.dds` / `icon_artillery.dds` | Icon_PT… | icon_art… | icon_art… | icon_art… |
+ *   | `loading_full_256x16.dds` / `loadingfull_256x16.dds` | loading_full | loading_full | **loadingfull** | **loadingfull** |
+ *
+ * Only the third pair separates lowercase from uppercase: `_` is 0x5F, so it is above `A`
+ * and below `a`, and the original treats it as above `F`.
+ *
+ * Two names that fold to the same thing fall back to the byte comparison, which keeps the
+ * order total and deterministic. That branch is unobservable rather than measured: Windows
+ * cannot hold such a pair in one directory, and none of the 70 archives in the base-game
+ * install contains one (`tools/probe_case_ties.py`).
+ */
+bool name_less( const std::string & a, const std::string & b )
+{
+	const std::size_t common = std::min( a.size(), b.size() );
+
+	for( std::size_t i = 0; i < common; ++i ) {
+		const char ca = fold_ascii( a[i] );
+		const char cb = fold_ascii( b[i] );
+
+		if( ca != cb ) {
+			return ca < cb;
+		}
+	}
+
+	if( a.size() != b.size() ) {
+		return a.size() < b.size();
+	}
+
+	return a < b;
+}
+
 /**
  * Append the payloads under `dir` in rfaPack.exe's order.
  *
  * The order is part of the output format: entries land in the archive table in exactly
  * this sequence, so any deviation stops our archives matching the oracle byte for byte.
- * It is also deterministic, unlike a plain readdir walk, because every level is sorted.
+ * It is also deterministic, unlike a plain readdir walk, because every level is sorted -
+ * with name_less(), which compares case-insensitively.
  */
 void collect_into( const std::filesystem::path & dir,
                    const std::string & prefix,
@@ -261,7 +318,7 @@ void collect_into( const std::filesystem::path & dir,
 
 	const auto by_name = []( const std::filesystem::directory_entry & a,
 	                         const std::filesystem::directory_entry & b ) {
-		return a.path().filename().string() < b.path().filename().string();
+		return name_less( a.path().filename().string(), b.path().filename().string() );
 	};
 
 	std::sort( files.begin(), files.end(), by_name );

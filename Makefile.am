@@ -1,6 +1,7 @@
 bin_PROGRAMS=adjust_monitor_settings \
 	create_desktop_icons \
 	list_monitor_resolutions \
+	rfaPack \
 	rfaUnpack
 
 adjust_monitor_settings_SOURCES=\
@@ -180,8 +181,26 @@ rfa_librfa_a_SOURCES = \
 noinst_LIBRARIES += cli/libcli.a
 
 cli_libcli_a_SOURCES = \
+		cli/PackCli.h \
+		cli/PackCli.cc \
 		cli/UnpackCli.h \
 		cli/UnpackCli.cc
+
+# --- rfaPack ---------------------------------------------------------------
+
+rfaPack_SOURCES = \
+		src_rfaPack/rfaPack.cc \
+		cli/PackCli.h \
+		tools_config.h
+
+rfaPack_LDADD = \
+		cli/libcli.a \
+		rfa/librfa.a \
+		third_party/minilzo/libminilzo.a \
+		libcommon/libcommon.a \
+		cpputils/io/libcpputilsio.a \
+		cpputils/cpputilsshared/libcpputilsshared.a \
+		cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a
 
 # --- rfaUnpack -------------------------------------------------------------
 

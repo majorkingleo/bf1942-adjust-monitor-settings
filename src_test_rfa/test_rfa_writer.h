@@ -20,6 +20,7 @@ TestCasePtr test_writer_round_trips_a_tree_through_our_reader();
 TestCasePtr test_writer_multi_chunk_entry_round_trips();
 TestCasePtr test_writer_empty_file_round_trips_in_both_policies();
 TestCasePtr test_writer_orders_entries_like_the_oracle();
+TestCasePtr test_writer_orders_names_the_way_the_original_folds_them();
 TestCasePtr test_writer_is_deterministic_across_thread_counts();
 TestCasePtr test_writer_missing_source_leaves_no_archive();
 TestCasePtr test_writer_matches_the_golden_store_archive_byte_for_byte();

@@ -49,6 +49,24 @@ FILES: list[tuple[str, bytes]] = [
     ("menu/empty.txt", b""),
     ("menu/nested/deep.txt", b"deep file contents\r\n"),
     ("menu/blob.bin", bytes(((i * 1664525 + 1013904223) >> 24) & 0xFF for i in range(200000))),
+    # Sibling names that pin the original's collation (finding 28). The oracle writes these
+    # into the golden archive, so the writer's byte comparison tests the rule instead of just
+    # our own idea of it:
+    #   InGame / Infantry…          the comparison folds case
+    #   Icon_* / icon_*             ditto, across a '_'
+    #   loading_full / loadingfull  the ONLY pair that separates folding to UPPERCASE from
+    #                               folding to lowercase, because '_' is 0x5F - above 'A'
+    #                               (0x41) and below 'a' (0x61). Without this pair the tree
+    #                               passes under either fold, which is how the first fix for
+    #                               this finding looked correct and still wrote different
+    #                               bytes.
+    ("menu/collation/InGame.txt", b"ingame\r\n"),
+    ("menu/collation/InfantryControlsPage1.txt", b"infantry 1\r\n"),
+    ("menu/collation/InfantryControlsPage2.txt", b"infantry 2\r\n"),
+    ("menu/collation/Icon_PT_Mine.txt", b"icon pt\r\n"),
+    ("menu/collation/icon_artillery.txt", b"icon artillery\r\n"),
+    ("menu/collation/loading_full.txt", b"loading full\r\n"),
+    ("menu/collation/loadingfull.txt", b"loadingfull\r\n"),
 ]
 
 

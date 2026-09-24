@@ -1,3 +1,67 @@
+commit f1814c02a5867c342ae5ca725d31ab6af16787d0
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 20:40:28 2026 +0200
+
+    Fail loudly from main, and add the missing error boundaries
+    
+    Every main() now reports to std::cerr and returns non-zero on failure. The
+    three monitor tools used to fall out of main() with 0 even after printing
+    an error, so a caller could not tell a failure from a success.
+    
+    adjust_monitor_settings is the one that needs care: its system("PAUSE")
+    exists so that a double-clicked window stays open, and it is most needed
+    when something went wrong. The failure is therefore recorded in a status
+    that the return uses, instead of returning from the catch, so the pause
+    still runs on both paths.
+    
+    rfaUnpack and the test runner had no boundary at all. For rfaUnpack that
+    was a real defect: ToolLog::Session throws when the log file cannot be
+    opened, and an escaping exception reached std::terminate with no message.
+    The test runner's registration moved into make_test_cases() so that main()
+    is nothing but the boundary, which also keeps the registration block at
+    its original indentation instead of reindenting 90 lines.
+    
+    Exit codes are now 0 for success and 1 for a usage, argument or I/O
+    failure. rfaUnpack keeps exiting 0 for a selection miss, because the
+    oracle's golden file pins that behaviour.
+    
+    test_rfa.exe -t 99 still exits 1, so the suite can still report failure.
+    79 testcases, all green.
+
+commit 5c4ff4182927324d37c17e0cc9b2b4cf1136df81
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 20:23:57 2026 +0200
+
+    Implement rfaUnpack against the captured oracle behaviour
+    
+    Add cli/UnpackCli.{h,cc} holding cli::run_unpack( args, out ), with
+    src_rfaUnpack/rfaUnpack.cc as a three-line wrapper. The command line is a
+    library rather than program code so that the compatibility tests can call
+    the same entry point the program does: spawning the binaries from a test
+    is not viable, because std::system goes through cmd.exe, which reads "/"
+    as a switch and resolves relative paths against its own directory.
+    
+    Every unpack scenario in tests/golden/oracle-cli.json now matches - the
+    message set and the exit code are identical for the usage banner, the
+    missing target directory, -i in and out of range, a full-path list, a
+    basename list, and a full extract. Extracting the FH fixture produces
+    251 files with identical paths and an identical SHA-256 for every one of
+    them against bin\rfaUnpack.orig.exe, which is the only external check of
+    what the writer puts on disk.
+    
+    -f is deliberately fixed. The shipped build matches nothing with it, and
+    the golden records that as unpack_f_broken; ours tries the full internal
+    path first and then the basename. Selection misses still exit 0 because
+    the golden pins that, so only usage, argument and I/O failures exit 1.
+    Two paths the oracle was never captured reaching - an unreadable archive
+    and an unreadable list file - print messages of our own and exit 1.
+    
+    ToolLog gains strip_options, so that --log-file and its path are not read
+    as positional arguments by a tool that has some.
+    
+    New test subject src_test_rfa/test_rfa_cli covers the scenarios above
+    against the fixtures. 78 testcases, all green.
+
 commit 942ec38235105fe3ad58769dd82e029cd9139b2f
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 17:12:24 2026 +0200
