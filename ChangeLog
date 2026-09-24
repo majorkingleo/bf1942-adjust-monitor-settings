@@ -1,3 +1,39 @@
+commit ef3d3d4ffb2de6200fe7d33c288ad8070784dc20
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 16:51:58 2026 +0200
+
+    write debug meessages like lotr_analyzer
+
+commit 94f320f4aa1109627d582d2b666c214e83422edc
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 16:40:18 2026 +0200
+
+    updated cpputils
+
+commit 3fff67903e4448e77288a6c312dded1afa483bc7
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 16:39:29 2026 +0200
+
+    Give each tool its own directory and add libcommon
+    
+    Move the three monitor programs into src_<program>/ and the shared
+    common.cc/common.h into libcommon/, built as libcommon.a. The programs
+    still link into the repo root, so the deployment paths are unchanged.
+    
+    Makefile.am gains libcommon/libcommon.a and -I$(top_srcdir)/libcommon,
+    which keeps the plain #include "common.h" working from the new
+    subdirectories.
+    
+    tools_config.h deliberately stays in the root: the cpputils headers
+    reach it with ../../../tools_config.h, which only resolves through the
+    cpputilsformat -I entry that sits one level below cpputilsshared.
+    
+    AGENTS.md and PLAN_rfa_tools.md describe the new layout; the rfaPack and
+    rfaUnpack programs are planned as src_rfaPack/ and src_rfaUnpack/.
+    
+    Verified with ./reconfigure.sh, a clean make and make check (59
+    testcases), plus list_monitor_resolutions.exe and test_rfa.exe -t 99.
+
 commit 5013b24a837104a4ad570bb080d211c185ebd702
 Author: Martin Oberzalek <kingleo@gmx.at>
 Date:   Thu Sep 24 16:18:12 2026 +0200

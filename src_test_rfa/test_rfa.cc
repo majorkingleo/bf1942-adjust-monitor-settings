@@ -14,6 +14,7 @@
  * @author Copyright (c) 2026
  */
 
+#include "test_debuglog.h"
 #include "test_lzo.h"
 #include "test_rfa_archive.h"
 #include "test_rfa_format.h"
@@ -42,6 +43,17 @@ int main( int argc, char ** argv )
 	test_cases.push_back( test_testcase_throws_exception_flag() );
 	test_cases.push_back( test_testcase_onefile_gets_name_from_testcase() );
 	test_cases.push_back( test_testcase_onefile_removes_stale_file() );
+
+	// --- debug logging (libcommon) ----------------------------------------
+	test_cases.push_back( test_debuglog_argv_takes_the_separate_value() );
+	test_cases.push_back( test_debuglog_argv_takes_the_equals_form() );
+	test_cases.push_back( test_debuglog_argv_absent_means_no_log_file() );
+	test_cases.push_back( test_debuglog_argv_without_a_value_is_an_error() );
+	test_cases.push_back( test_debuglog_debug_flag_is_opt_in() );
+	test_cases.push_back( test_debuglog_session_writes_a_timestamped_line() );
+	test_cases.push_back( test_debuglog_second_session_appends() );
+	test_cases.push_back( test_debuglog_session_without_a_backend_writes_nothing() );
+	test_cases.push_back( test_debuglog_message_without_a_session_is_harmless() );
 
 	// --- lzo (vendored miniLZO) -------------------------------------------
 	test_cases.push_back( test_lzo_init() );

@@ -137,7 +137,9 @@ Honest gaps, so nothing is assumed:
   console backend; the file backend is driven by whether `LogFile` is configured.
 - **No rotation, no size cap**, no `max_files`. Append-only, forever.
 - **No `function` output**, although every call site captures `__PRETTY_FUNCTION__` into `Data`.
-- **No milliseconds in the line**, although the time point is cast to milliseconds.
+- The line **does** carry milliseconds: `%S` prints the fractional part when the time point
+  is finer than seconds, so the timestamp is `[2026-09-24 15:00:18.491]` and its width is
+  not constant. Verified against real output, not read off the format string.
 - **No `prefix` in the file**, although `Data::prefix` carries it.
 
 Adding a level is a two-line change in spirit: extend `Data`, and filter in `AsyncOut::Debug::add()`

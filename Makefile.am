@@ -18,6 +18,7 @@ create_desktop_icons_SOURCES=\
 			  
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/libcommon \
+	-I$(top_srcdir)/cpputils/io \
 	-I$(top_srcdir)/cpputils/cpputilsshared  \
 	-I$(top_srcdir)/cpputils/cpputilsshared/cpputilsformat \
 	-I$(top_srcdir)/src  \
@@ -26,6 +27,7 @@ AM_CPPFLAGS = \
 
 noinst_LIBRARIES=\
 	libcommon/libcommon.a \
+	cpputils/io/libcpputilsio.a \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a 
 
@@ -58,7 +60,8 @@ cpputils_cpputilsshared_libcpputilsshared_a_SOURCES= \
 		cpputils/cpputilsshared/utf8/cpp11.h \
 		cpputils/cpputilsshared/utf8/cpp17.h \
 		cpputils/cpputilsshared/utf8_util.h \
-		cpputils/cpputilsshared/utf8_util.cc
+		cpputils/cpputilsshared/utf8_util.cc \
+		cpputils/cpputilsshared/FastDelivery.h
 
 
 cpputils_cpputilsshared_cpputilsformat_libcpputilsformat_a_SOURCES= \
@@ -74,29 +77,59 @@ cpputils_cpputilsshared_cpputilsformat_libcpputilsformat_a_SOURCES= \
 	cpputils/cpputilsshared/cpputilsformat/cwformat.h \
 	cpputils/cpputilsshared/cpputilsformat/cwformat.cc
 
-# Shared code of the monitor tools - currently get_user_profile().
-# Its directory is on the include path via AM_CPPFLAGS above, so the tools
-# can keep their plain #include "common.h" after moving into subdirectories.
+# cpputils/io brings the debug plumbing: Tools::Debug / Tools::x_debug (which CPPDEBUG
+# calls), the synchronous OutDebug frontend, the console colour helper, and the locale
+# detection the output paths use. read_file is a dependency of DetectLocale.
+noinst_LIBRARIES += cpputils/io/libcpputilsio.a
+
+cpputils_io_libcpputilsio_a_SOURCES = \
+		cpputils/io/ColoredOutput.h \
+		cpputils/io/ColoredOutput.cc \
+		cpputils/io/CpputilsDebug.h \
+		cpputils/io/CpputilsDebug.cc \
+		cpputils/io/DetectLocale.h \
+		cpputils/io/DetectLocale.cc \
+		cpputils/io/OutDebug.h \
+		cpputils/io/OutDebug.cc \
+		cpputils/io/read_file.h \
+		cpputils/io/read_file.cc
+
+# Shared code of the monitor tools: get_user_profile() plus the debug logging
+# frontend and backends (see .github/skills/debug-logging/). Its directory is on the
+# include path via AM_CPPFLAGS above, so the tools keep their plain
+# #include "common.h" from inside their own subdirectories.
 libcommon_libcommon_a_SOURCES = \
 		libcommon/common.h \
-		libcommon/common.cc
+		libcommon/common.cc \
+		libcommon/AsyncOutDebug.h \
+		libcommon/AsyncOutDebug.cc \
+		libcommon/AsyncFileLogger.h \
+		libcommon/AsyncFileLogger.cc \
+		libcommon/DebugLog.h \
+		libcommon/DebugLog.cc
 
 adjust_monitor_settings_LDADD = \
 	libcommon/libcommon.a \
+	cpputils/io/libcpputilsio.a \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a 
 
 list_monitor_resolutions_LDADD = \
 	libcommon/libcommon.a \
+	cpputils/io/libcpputilsio.a \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a
 
 create_desktop_icons_LDADD = \
 	libcommon/libcommon.a \
+	cpputils/io/libcpputilsio.a \
 	cpputils/cpputilsshared/libcpputilsshared.a \
 	cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a 
 
-LIBS=-lole32 -luuid
+# -liconv is needed by cpputils/io/read_file.cc (ReadFile::convert), which DetectLocale
+# pulls in to translate between the console encoding and UTF-8. The mingw-w64 sysroot
+# ships libiconv.a, and -static above makes the linker prefer it over the .dll.a.
+LIBS=-lole32 -luuid -liconv
 	
 AM_LDFLAGS= -static
 	
@@ -174,12 +207,16 @@ test_rfa_SOURCES = \
 		src_test_rfa/test_rfa_writer.cc \
 		src_test_rfa/test_testcommon.h \
 		src_test_rfa/test_testcommon.cc \
+		src_test_rfa/test_debuglog.h \
+		src_test_rfa/test_debuglog.cc \
 		tools_config.h
 
 test_rfa_LDADD = \
 		testcommon/libtestcommon.a \
+		libcommon/libcommon.a \
 		rfa/librfa.a \
 		third_party/minilzo/libminilzo.a \
+		cpputils/io/libcpputilsio.a \
 		cpputils/cpputilsshared/libcpputilsshared.a \
 		cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a
 

@@ -5,6 +5,7 @@
  *      Author: Martin
  */
 #include "common.h"
+#include <CpputilsDebug.h>
 #include <cppdir.h>
 #include <xml.h>
 #include <stderr_exception.h>
@@ -36,6 +37,7 @@ std::string get_user_profile( const std::string & bf_base_folder )
             }
 
             std::string entry = strip(entries[1], " \"\t" );
+            CPPDEBUG( format( "profile '%s' from '%s'", entry, profile_file ) );
             return entry;
         }
     }

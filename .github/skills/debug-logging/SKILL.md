@@ -74,7 +74,7 @@ What it already does:
 |---|---|
 | Open mode | `std::ios::out \| std::ios::app` — appends, never truncates across restarts |
 | Open failure | throws `STDERR_EXCEPTION( Tools::format( "cannot open log file '%s'", filename ) )` |
-| Line format | `[YYYY-MM-DD HH:MM:SS] basename:line message` |
+| Line format | `[YYYY-MM-DD HH:MM:SS.mmm] basename:line message` — `%S` prints the fractional part whenever the time point is finer than seconds |
 | Timestamp | `Data.when` is stamped **at the call site**, so order and time are production order, not consumption order |
 | Timezone | `TZ` env var via `std::chrono::locate_zone`, else `std::chrono::current_zone()` |
 | Wide messages | `Utf8Util::wStringToUtf8` — the **file is always UTF-8**, unlike the console path which goes through `DetectLocale::w2out` and follows the console locale |
@@ -141,7 +141,17 @@ cpputils_io_libcpputilsio_a_SOURCES = \
 		cpputils/io/OutDebug.cc
 ```
 
-and put `cpputils/io/libcpputilsio.a` into the `LDADD` of every target that logs. Requirements:
+and put `cpputils/io/libcpputilsio.a` into the `LDADD` of every target that logs, plus
+
+```make
+LIBS += -liconv
+```
+
+`read_file.cc` implements `ReadFile::convert` with `iconv`, and `DetectLocale` calls it to
+translate between the console encoding and UTF-8. Once `DetectLocale` is pulled in — and
+`OutDebug` pulls it in — the link needs it. Without it:
+`undefined reference to `iconv_open'`. On the Cygwin mingw-w64 sysroot `libiconv.a`
+exists, and with `-static` the linker prefers it over `libiconv.dll.a`. Requirements:
 
 - **C++20 or newer.** `std::binary_semaphore`, `std::chrono::utc_clock`, `std::chrono::locate_zone`
   and `std::format` are all used. (The reference uses `-std=gnu++23`, this repo `-std=c++20`.)
@@ -162,7 +172,7 @@ and put `cpputils/io/libcpputilsio.a` into the `LDADD` of every target that logs
 | 5 | backend destroyed while messages are still in flight | `subscribe()` stores a raw pointer; only `~PublisherNode()` unregisters |
 | 6 | `detach()` without the quit/wait handshake | the last queued lines die with the process |
 | 7 | expecting `file:line` in the file backend | it prints basename + line, `prefix` is console-only, and `function` is captured in `Data` but never printed by either backend |
-| 8 | expecting milliseconds in the timestamp | `time_point_cast<milliseconds>` runs, then the format string only emits `%S` |
+| 8 | assuming a whole-second timestamp | `%S` prints the fractional part when the time point is finer than seconds, so the real line is `[2026-09-24 15:00:18.491]` and its width varies |
 | 9 | `-std=c++20` missing | `<semaphore>`, `utc_clock`, `std::format` unavailable |
 
 ## Files

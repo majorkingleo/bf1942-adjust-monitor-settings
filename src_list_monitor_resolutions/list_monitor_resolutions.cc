@@ -12,6 +12,8 @@
 #include <aclapi.h>
 #include <tchar.h>
 #include <memory>
+#include "DebugLog.h"
+#include <CpputilsDebug.h>
 
 using namespace Tools;
 
@@ -33,9 +35,16 @@ struct ResolutionInfo
 	}
 };
 
-int main()
+int main( int argc, char ** argv )
 {
     try {
+
+        // installs Tools::x_debug; must be the first statement in main(), because every
+        // CPPDEBUG below needs somewhere to go for as long as the session lives
+        const ToolLog::Session log( ToolLog::log_file_from_argv( argc, argv ),
+                                    ToolLog::debug_flag_from_argv( argc, argv ) );
+
+        CPPDEBUG( "enumerating display modes" );
 
     	std::set<ResolutionInfo> sres;
 
@@ -43,6 +52,8 @@ int main()
         for( DWORD iModeNum = 0; EnumDisplaySettingsA( nullptr, iModeNum, &mode ) != 0; ++iModeNum ) {
            sres.insert( ResolutionInfo{ mode.dmPelsWidth, mode.dmPelsHeight } );
         }
+
+        CPPDEBUG( Tools::format( "%d distinct resolutions", static_cast<int>( sres.size() ) ) );
 
         std::list<ResolutionInfo> lres( sres.begin(), sres.end() );
         lres.sort();

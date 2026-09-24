@@ -15,7 +15,7 @@ Makefiles, so `bin_PROGRAMS` links next to the top-level `Makefile`.
 
 | Directory | Contents |
 |---|---|
-| `libcommon/` | `libcommon.a` — shared code of the monitor tools (`common.cc`, `common.h`) |
+| `libcommon/` | `libcommon.a` — shared code of the monitor tools (`common.cc`, `common.h`) plus the debug logging session (`AsyncOutDebug.*`, `AsyncFileLogger.*`, `DebugLog.*`) |
 | `src_adjust_monitor_settings/` | `adjust_monitor_settings.cc` |
 | `src_create_desktop_icons/` | `create_desktop_icons.cc`, `ShortcutProvider.{h,cc}` |
 | `src_list_monitor_resolutions/` | `list_monitor_resolutions.cc` |
@@ -31,6 +31,24 @@ Makefiles, so `bin_PROGRAMS` links next to the top-level `Makefile`.
 that `-I` breaks `cppdir.cc` (and every other cpputils source including it) with
 `fatal error: ../../../tools_config.h: No such file or directory`. The `-I$(top_srcdir)/src`
 entry is a leftover from the upstream project and points at nothing.
+
+## Debug logging
+
+Every tool installs a logging session as the **first** statement of `main()`:
+
+```cpp
+const ToolLog::Session log( ToolLog::log_file_from_argv( argc, argv ),
+                            ToolLog::debug_flag_from_argv( argc, argv ) );
+```
+
+`--log-file <path>` adds a file backend, `--debug` adds a console backend. With neither, the
+frontend has no subscriber and messages are dropped — both are opt-in, so the existing
+output stays as it is (`list_monitor_resolutions.exe` prints a machine-readable list).
+Messages are emitted as `CPPDEBUG( Tools::format( ... ) )` and vanish entirely under
+`NDEBUG`. The session owns its thread and joins it in the destructor, which is the one
+deliberate difference from the reference implementation in `examples/lotr_analyzer`.
+
+Mechanism, design notes and pitfalls: `.github/skills/debug-logging/`.
 
 ## Build
 
@@ -57,6 +75,12 @@ C:\cygwin64\bin\bash.exe -lc "cd '<workspace>' && make"
 * `AM_CPPFLAGS` contains `-std=c++20`, which is invalid for a C translation unit.
   Any `.c` file added to this tree needs its own per-target `CPPFLAGS`, as
   `third_party/minilzo/libminilzo.a` does.
+* `cpputils/io` is not part of `libcpputilsshared.a`; this tree builds it separately as
+  `cpputils/io/libcpputilsio.a` (CpputilsDebug, OutDebug, DetectLocale, ColoredOutput,
+  read_file). It needs **`-liconv`** in `LIBS`: `read_file.cc` implements
+  `ReadFile::convert` with `iconv` and `DetectLocale` calls it, so the link fails with
+  ``undefined reference to `iconv_open'`` without it. The Cygwin mingw-w64 sysroot ships
+  `libiconv.a`, which `-static` prefers over `libiconv.dll.a`.
 * The suite must be able to report failure: `test_rfa.exe -t 99` exits 1 by design.
 
 ## Skills

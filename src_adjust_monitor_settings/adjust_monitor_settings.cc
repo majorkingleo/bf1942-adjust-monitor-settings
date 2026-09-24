@@ -13,6 +13,8 @@
 #include <tchar.h>
 #include <memory>
 #include "common.h"
+#include "DebugLog.h"
+#include <CpputilsDebug.h>
 
 using namespace Tools;
 
@@ -48,6 +50,12 @@ MonitorData get_monitor_data()
         throw STDERR_EXCEPTION( "failed calling EnumDisplaySettingsA");
     }
 
+    CPPDEBUG( Tools::format( "current mode %dx%d, %d bpp, %d Hz",
+                             static_cast<int>( mode.dmPelsWidth ),
+                             static_cast<int>( mode.dmPelsHeight ),
+                             static_cast<int>( mode.dmBitsPerPel ),
+                             static_cast<int>( mode.dmDisplayFrequency ) ) );
+
     return { mode.dmDisplayFrequency,
              mode.dmBitsPerPel,
              mode.dmPelsWidth,
@@ -58,6 +66,7 @@ void write_video_con( const std::string & path, const MonitorData & monitor )
 {   
     std::string file = CppDir::concat_dir( path, VIDEO_CON );
 
+    CPPDEBUG( Tools::format( "generating '%s'", file ) );
     std::cout << "generating: " << file << std::endl;
 
     grant_write(file );
@@ -93,9 +102,15 @@ void write_video_con( const std::string & path, const MonitorData & monitor )
 
 
 
-int main()
+int main( int argc, char ** argv )
 {
     try {
+
+        // installs Tools::x_debug; must be the first statement in main(), because every
+        // CPPDEBUG below needs somewhere to go for as long as the session lives
+        const ToolLog::Session log( ToolLog::log_file_from_argv( argc, argv ),
+                                    ToolLog::debug_flag_from_argv( argc, argv ) );
+
         auto monitor = get_monitor_data();
 
         std::cout << "Monitor: width: " << monitor.width
@@ -151,6 +166,8 @@ int main()
 
                 std::string profile = file.get_name();
                 //std::cout << "Profile found: " << profile << std::endl;
+
+                CPPDEBUG( Tools::format( "profile '%s'", profile ) );
 
                 std::string profile_folder = CppDir::concat_dir(bf_base_folder, R"(Mods\bf1942\Settings\Profiles)", profile);
 

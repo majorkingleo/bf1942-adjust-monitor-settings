@@ -5,7 +5,9 @@
  *      Author: Martin
  */
 #include "common.h"
+#include "DebugLog.h"
 #include "ShortcutProvider.h"
+#include <CpputilsDebug.h>
 #include <cppdir.h>
 #include <stderr_exception.h>
 #include <windows.h>
@@ -32,6 +34,10 @@ static void create_icon( const std::string & bf_bf1942_exe,
 	static std::string desktop_directory = get_desktop_directory_ansi();
 	ShortcutProvider sp;
 
+	CPPDEBUG( Tools::format( "creating '%s' for '%s'",
+	                         link_name,
+	                         CppDir::concat_dir( desktop_directory, link_name ) ) );
+
 	sp.Create( const_cast<char*>(bf_bf1942_exe.c_str()),
 			   const_cast<char*>(start_options.c_str()),
 			   const_cast<char*>(CppDir::concat_dir(desktop_directory,link_name).c_str()),
@@ -42,9 +48,15 @@ static void create_icon( const std::string & bf_bf1942_exe,
 			   0 );
 }
 
-int main()
+int main( int argc, char ** argv )
 {
 	try {
+
+		// installs Tools::x_debug; must be the first statement in main(), because every
+		// CPPDEBUG below needs somewhere to go for as long as the session lives
+		const ToolLog::Session log( ToolLog::log_file_from_argv( argc, argv ),
+		                            ToolLog::debug_flag_from_argv( argc, argv ) );
+
 		CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
 		std::string start = CppDir::pwd();
@@ -62,6 +74,7 @@ int main()
 
 		std::string bf_base_folder = f_bf1942_exe.get_path();
 
+		CPPDEBUG( Tools::format( "battlefield folder '%s'", bf_base_folder ) );
 
 		create_icon( f_bf1942_exe.get_full_path(), "+game DesertCombat", "BF DC.lnk", "BF 1942 Desert Combat", bf_base_folder, "Icon-DC.ico" );
 		create_icon( f_bf1942_exe.get_full_path(), "+game DC_Extended", "BF DCX.lnk", "BF 1942 Desert Combat Extended", bf_base_folder, "Icon-DCX.ico" );
