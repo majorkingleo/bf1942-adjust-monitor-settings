@@ -145,7 +145,7 @@ std::uint64_t total_bytes( const std::vector<rfa::SourceFile> & files )
 
 } // namespace
 
-int run_pack( const std::vector<std::string> & args, std::ostream & out )
+int run_pack( const std::vector<std::string> & args, std::ostream & out, std::ostream & err )
 {
 	const Options options = parse( args );
 
@@ -166,8 +166,8 @@ int run_pack( const std::vector<std::string> & args, std::ostream & out )
 		// valid by our own reader, but producing something the target cannot read must not
 		// happen silently. This goes to stderr because every captured golden has an empty
 		// stderr and a packed stdout; stdout stays a faithful reproduction.
-		std::cerr << "WARNING! -Compress output is not readable by RFA Pack 1.7 "
-		             "(PLAN_rfa_tools.md finding 27). Use store mode unless the target is ours.\n";
+		err << "WARNING! -Compress output is not readable by RFA Pack 1.7 "
+		       "(PLAN_rfa_tools.md finding 27). Use store mode unless the target is ours.\n";
 	}
 
 	if( options.update ) {

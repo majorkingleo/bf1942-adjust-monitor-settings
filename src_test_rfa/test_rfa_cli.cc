@@ -18,6 +18,7 @@
 
 #include "test_rfa_cli.h"
 
+#include "PackCli.h"
 #include "UnpackCli.h"
 
 #include "rfa/RfaArchive.h"
@@ -89,6 +90,60 @@ std::string run( const std::vector<std::string> & args, int & rc )
 	std::ostringstream out;
 	rc = cli::run_unpack( args, out );
 	return out.str();
+}
+
+/// The same for rfaPack, whose warnings land on a second stream.
+std::string run_pack( const std::vector<std::string> & args, int & rc, std::string & err )
+{
+	std::ostringstream out;
+	std::ostringstream errors;
+	rc = cli::run_pack( args, out, errors );
+	err = errors.str();
+	return out.str();
+}
+
+/**
+ * Where tools/rfa_golden_archives.py put the oracle's archives, or "" if they are missing.
+ *
+ * The writer testcases have their own copy of this lookup; the CLI needs one too because it
+ * asserts on the archive as a FILE, which is the one thing the writer's in-memory comparison
+ * cannot see.
+ */
+std::string golden_root()
+{
+	std::vector<std::string> candidates;
+
+	if( const char * from_env = std::getenv( "RFA_TEST_DATA_DIR" ) ) {
+		if( *from_env ) {
+			candidates.push_back( std::string( from_env ) + "/golden" );
+		}
+	}
+
+	candidates.push_back( "tests/data/golden" );
+	candidates.push_back( "../tests/data/golden" );
+	candidates.push_back( "../../tests/data/golden" );
+
+	for( const std::string & candidate : candidates ) {
+		std::ifstream probe( ( candidate + "/oracle-store.rfa" ).c_str(), std::ios::binary );
+
+		if( probe.good() ) {
+			return candidate;
+		}
+	}
+
+	return std::string();
+}
+
+bool write_file( const std::string & path, const std::string & content )
+{
+	std::ofstream out( path.c_str(), std::ios::binary );
+
+	if( !out ) {
+		return false;
+	}
+
+	out << content;
+	return out.good();
 }
 
 bool contains( const std::string & haystack, const std::string & needle )
@@ -554,6 +609,275 @@ TestCasePtr test_cli_full_extract_of_the_fh_archive_matches_the_reader()
 			}
 
 			return full_extract_matches_the_reader( FH, scratch_file + ".fh" );
+		},
+		std::ios::out );
+}
+
+// ---------------------------------------------------------------------------
+// CLI: rfaPack
+//
+// The golden's two pack scenarios pin the chatter, and the archives they were captured
+// against are gone (they were temp files), so what a testcase can reproduce is the *shape*:
+// the same lines, in the same spelling, with the same exit codes. The byte-level claim is
+// made separately, against the committed oracle archive, because that is the part that
+// matters and the part the golden cannot carry.
+//
+// One deliberate divergence, recorded here rather than hidden: the golden's `pack_compress`
+// has an EMPTY stderr, and ours warns there about finding 27. That is the point of the
+// warning - the original fails silently, we do not.
+// ---------------------------------------------------------------------------
+
+TestCasePtr test_cli_pack_no_arguments_matches_the_golden()
+{
+	return std::make_shared<TestCaseFuncNoInp>(
+		"cli_pack_no_arguments_matches_the_golden", true, []() {
+			int rc = 0;
+			std::string err;
+			const std::string out = run_pack( { "rfaPack.exe" }, rc, err );
+
+			// The usage block verbatim, trailing spaces included - both of them are in the
+			// golden, and a "tidy" edit would silently break drop-in compatibility.
+			return rc == 1
+			    && contains( out, "ERROR! Not enough command line arguments" )
+			    && contains( out, " Usage examples: \n" )
+			    && contains( out, "   ProgramName [sourceDir] [PackDirName] [Archive.rfa] [ -u update existing .rfa | -Compress]" )
+			    && contains( out, "   RfaPack.exe d:/menu menu menu.rfa\n" )
+			    && contains( out, "   RfaPack.exe d:/menu menu menu.rfa -u\n" )
+			    && contains( out, "   RfaPack.exe d:/menu menu menu.rfa -Compress\n" )
+			    && contains( out, "   RfaPack.exe d:/menu menu menu.rfa -u -Compress" )
+			    && contains( out, "-- RFA Pack 1.7 --" )
+			    && err.empty();
+		} );
+}
+
+TestCasePtr test_cli_pack_plain_matches_the_golden()
+{
+	// The golden's `pack_plain`: one source file, a directory-qualified archive path, no
+	// switches.
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_pack_plain_matches_the_golden",
+		[]( const std::string & scratch_file ) {
+			Scratch work( scratch_file + ".plain" );
+
+			const std::string src     = work.subdir( "src" );
+			const std::string archive = work.path( "plain.rfa" );
+
+			if( !write_file( src + "/one.txt", "Game.setNumberOfTickets 1 115\r\n" ) ) {
+				std::cout << "[rfa] could not create the source file\n";
+				return false;
+			}
+
+			int rc = 0;
+			std::string err;
+			const std::string out =
+				run_pack( { "rfaPack.exe", src, "menu", archive }, rc, err );
+
+			if( !err.empty() ) {
+				std::cout << "[rfa] unexpected stderr: " << err << "\n";
+			}
+
+			return rc == 0
+			    && contains( out, "TotalFiles: 1" )
+			    && contains( out, "  Uncompressed .rfa size (mb): 0" )
+			    && contains( out, "tmpDestDirLoc: " +
+			                     std::filesystem::path( archive ).parent_path().string() )
+			    && contains( out, " TimeTaken: " )
+			    && contains( out, "-- RFA Pack 1.7 --" )
+			    && contains( out, " UseCompression: 0" )
+			    && contains( out, " Update & Append: 0" )
+			    && err.empty()
+			    && std::filesystem::is_regular_file( archive );
+		},
+		std::ios::out );
+}
+
+TestCasePtr test_cli_pack_compress_matches_the_golden_and_warns()
+{
+	// The golden's `pack_compress`. Same lines as `pack_plain` with ` UseCompression: 1` -
+	// and the one place where we depart from the original on purpose: it says nothing about
+	// the archive it just wrote being unreadable by the tool family it belongs to
+	// (finding 27), we say so on stderr.
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_pack_compress_matches_the_golden_and_warns",
+		[]( const std::string & scratch_file ) {
+			Scratch work( scratch_file + ".compress" );
+
+			const std::string src     = work.subdir( "src" );
+			const std::string archive = work.path( "comp.rfa" );
+
+			if( !write_file( src + "/one.txt", "Game.setNumberOfTickets 1 115\r\n" ) ) {
+				return false;
+			}
+
+			int rc = 0;
+			std::string err;
+			const std::string out =
+				run_pack( { "rfaPack.exe", src, "menu", archive, "-Compress" }, rc, err );
+
+			return rc == 0
+			    && contains( out, "TotalFiles: 1" )
+			    && contains( out, "  Uncompressed .rfa size (mb): 0" )
+			    && contains( out, "-- RFA Pack 1.7 --" )
+			    && contains( out, " UseCompression: 1" )
+			    && contains( out, " Update & Append: 0" )
+			    && std::filesystem::is_regular_file( archive )
+			    // the golden has an empty stderr here; the warning is the divergence
+			    && contains( err, "WARNING! -Compress output is not readable by RFA Pack 1.7" );
+		},
+		std::ios::out );
+}
+
+TestCasePtr test_cli_pack_switch_matching_is_case_insensitive()
+{
+	// The documented spellings are -u and -Compress. Accepting -COMPRESS and -U costs
+	// nothing and cannot break a caller that uses the documented form, so both are pinned
+	// here: a case-only typo must not silently pack in the wrong mode.
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_pack_switch_matching_is_case_insensitive",
+		[]( const std::string & scratch_file ) {
+			Scratch work( scratch_file + ".case" );
+
+			const std::string src = work.subdir( "src" );
+
+			if( !write_file( src + "/one.txt", "x" ) ) {
+				return false;
+			}
+
+			int rc             = 0;
+			std::string err;
+			const std::string upper = work.path( "upper.rfa" );
+
+			const std::string out =
+				run_pack( { "rfaPack.exe", src, "menu", upper, "-COMPRESS" }, rc, err );
+
+			// -COMPRESS is honoured...
+			if( rc != 0 || !contains( out, " UseCompression: 1" ) ) {
+				return false;
+			}
+
+			// ...and -U reaches the same refusal as -u rather than being ignored.
+			const std::string update = work.path( "update.rfa" );
+
+			const std::string out_u =
+				run_pack( { "rfaPack.exe", src, "menu", update, "-U" }, rc, err );
+
+			return rc == 1
+			    && contains( out_u, " Update & Append: 1" )
+			    && contains( out_u, "Error! -u is not implemented yet" )
+			    && !std::filesystem::exists( update );
+		},
+		std::ios::out );
+}
+
+TestCasePtr test_cli_pack_update_refuses_and_writes_nothing()
+{
+	// -u is not implemented (§2.5: it is a fresh pack plus carried-over entries, with three
+	// divergences D6-D8 still undecided). Until it is, the switch is recognised, echoed and
+	// refused: a caller who asked for an update must not receive a plain pack instead. The
+	// archive must not exist afterwards, or a caller cannot tell the two apart.
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_pack_update_refuses_and_writes_nothing",
+		[]( const std::string & scratch_file ) {
+			Scratch work( scratch_file + ".update" );
+
+			const std::string src     = work.subdir( "src" );
+			const std::string archive = work.path( "updated.rfa" );
+
+			if( !write_file( src + "/one.txt", "x" ) ||
+			    !write_file( src + "/two.txt", "y" ) ) {
+				return false;
+			}
+
+			int rc = 0;
+			std::string err;
+			const std::string out =
+				run_pack( { "rfaPack.exe", src, "menu", archive, "-u" }, rc, err );
+
+			if( rc != 1 ) {
+				std::cout << "[rfa] -u exited " << rc << " instead of refusing\n";
+			}
+
+			return rc == 1
+			    && contains( out, " Update & Append: 1" )
+			    && contains( out, "Error! -u is not implemented yet" )
+			    && !std::filesystem::exists( archive );
+		},
+		std::ios::out );
+}
+
+TestCasePtr test_cli_pack_missing_source_directory_is_reported()
+{
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_pack_missing_source_directory_is_reported",
+		[]( const std::string & scratch_file ) {
+			Scratch work( scratch_file + ".missing" );
+
+			const std::string missing = work.path( "no_such_dir" );
+			const std::string archive = work.path( "out.rfa" );
+
+			int rc = 0;
+			std::string err;
+			const std::string out =
+				run_pack( { "rfaPack.exe", missing, "menu", archive }, rc, err );
+
+			// A directory that is not there is a failure, and it must not leave an archive
+			// behind that looks like a successful pack of an empty tree.
+			return rc == 1
+			    && contains( out, "Error! '" + missing + "' is not a directory" )
+			    && !std::filesystem::exists( archive );
+		},
+		std::ios::out );
+}
+
+TestCasePtr test_cli_pack_store_output_is_byte_identical_to_the_oracle_archive()
+{
+	// The strongest assertion available to this file, and the reason the CLI exists as a
+	// library: driving the command line - argument parsing, the walk, the policy, the write
+	// - must produce bin\rfaPack.orig.exe's own bytes for the committed golden tree, not
+	// merely for the writer underneath it. Found by reading the file the CLI actually
+	// created, which is the one thing the writer's in-memory comparison cannot cover.
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_pack_store_output_is_byte_identical_to_the_oracle_archive",
+		[]( const std::string & scratch_file ) {
+			const std::string root = golden_root();
+
+			if( root.empty() ) {
+				std::cout << "[rfa] tests/data/golden not found; run "
+				             "tools/rfa_golden_archives.py\n";
+				return false;
+			}
+
+			Scratch work( scratch_file + ".golden" );
+
+			const std::string archive = work.path( "ours-store.rfa" );
+
+			int rc = 0;
+			std::string err;
+			const std::string out =
+				run_pack( { "rfaPack.exe", root + "/tree", "menu", archive }, rc, err );
+
+			if( rc != 0 ) {
+				std::cout << "[rfa] the CLI exited " << rc << ":\n" << out << "\n" << err << "\n";
+				return false;
+			}
+
+			const std::vector<unsigned char> ours   = read_whole_file( archive );
+			const std::vector<unsigned char> theirs = read_whole_file( root + "/oracle-store.rfa" );
+
+			if( ours.empty() || theirs.empty() ) {
+				std::cout << "[rfa] could not read one of the archives\n";
+				return false;
+			}
+
+			if( ours != theirs ) {
+				std::cout << "[rfa] store archive differs: ours " << ours.size()
+				          << " B, the oracle " << theirs.size() << " B\n";
+				return false;
+			}
+
+			return contains( out, "TotalFiles: " )
+			    && contains( out, " UseCompression: 0" )
+			    && err.empty();
 		},
 		std::ios::out );
 }

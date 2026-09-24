@@ -136,6 +136,15 @@ TestCases make_test_cases()
 	test_cases.push_back( test_cli_f_accepts_a_basename_unlike_the_original() );
 	test_cases.push_back( test_cli_full_extract_of_the_fh_archive_matches_the_reader() );
 
+	// --- CLI: rfaPack -----------------------------------------------------
+	test_cases.push_back( test_cli_pack_no_arguments_matches_the_golden() );
+	test_cases.push_back( test_cli_pack_plain_matches_the_golden() );
+	test_cases.push_back( test_cli_pack_compress_matches_the_golden_and_warns() );
+	test_cases.push_back( test_cli_pack_switch_matching_is_case_insensitive() );
+	test_cases.push_back( test_cli_pack_update_refuses_and_writes_nothing() );
+	test_cases.push_back( test_cli_pack_missing_source_directory_is_reported() );
+	test_cases.push_back( test_cli_pack_store_output_is_byte_identical_to_the_oracle_archive() );
+
 	return test_cases;
 }
 
