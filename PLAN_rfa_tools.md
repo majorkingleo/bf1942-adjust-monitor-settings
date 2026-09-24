@@ -380,6 +380,7 @@ runner's own failure paths were verified by hand (`-t 99` → exit 1, `--bogus` 
 | every fixture entry decompresses to its declared size | ✅ 259 entries across the 4 fixtures |
 | determinism: 1 vs 8 threads → identical bytes | ✅ |
 | **store-mode output byte-identical to `rfaPack.exe`** | ✅ **PASSES** — one comparison pins the stamp, first data offset (156), reserved field, version, table layout and entry order at once. Verified on the fixtures **and** on the real 618-entry vendor `menu.rfa` (finding 28) |
+| **an archive we wrote is really read by BF1942** | ✅ **PASSES** — our store pack installed as `Mods\bf1942\Archives\menu.rfa` brings `BF1942.exe +game bf1942` up to its **main menu**. The front end cannot start without that archive, so this is the engine itself accepting our container (finding 28) |
 | compress-mode output vs the oracle | ⚠️ **one-directional only** — see below and finding 27 |
 
 **Compress-mode output is not byte-identical, and cannot be.** RFA Pack 1.7 embeds a
@@ -798,6 +799,15 @@ archive) and comparing the result with the vendor tool's own store pack of the s
 (`AB3C2B9E72080914551D9B2E6A5A5F4D8D28A30AE2A32B6074DCA3324D7F3155`). Alongside store mode on
 the fixtures this is the strongest writer check in the project — a real shipping archive, not a
 fixture.
+
+**And it runs in the game.** The same file, installed as
+`origin\Mods\bf1942\Archives\menu.rfa`, brings `BF1942.exe +game bf1942` up to its **main
+menu**. The front end mounts that archive at startup and refuses to start without it, so this
+confirms the archive is not merely byte-identical to the oracle's but is actually parsed and
+consumed by the engine. That closes Phase 2 with a real archive and a real client instead of a
+fixture — the one check a unit test cannot make. Helper for the swap:
+`examples/bf_pablov_mod/work/menu_test/swap_menu.ps1` (`ours` / `oracle` / `vendor` / `status`);
+the vendor archive is kept as `Mods\bf1942\Archives\menu.rfa.vendor`.
 
 **Impact if unfixed.** Selection and content were never affected — the original reads our repack
 back to 618 files with every path and SHA-256 identical, because lookup is by name and the
