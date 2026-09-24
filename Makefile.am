@@ -1,6 +1,7 @@
 bin_PROGRAMS=adjust_monitor_settings \
 	create_desktop_icons \
-	list_monitor_resolutions
+	list_monitor_resolutions \
+	rfaUnpack
 
 adjust_monitor_settings_SOURCES=\
 		tools_config.h\
@@ -18,6 +19,7 @@ create_desktop_icons_SOURCES=\
 			  
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/libcommon \
+	-I$(top_srcdir)/cli \
 	-I$(top_srcdir)/cpputils/io \
 	-I$(top_srcdir)/cpputils/cpputilsshared  \
 	-I$(top_srcdir)/cpputils/cpputilsshared/cpputilsformat \
@@ -172,6 +174,31 @@ rfa_librfa_a_SOURCES = \
 		rfa/RfaWriter.h \
 		rfa/RfaWriter.cc
 
+# Command lines of the .rfa tools. A library rather than loose files in the program
+# directories, because the compatibility tests call the same entry points the programs
+# call: spawning the binaries from a test is not viable (PLAN_rfa_tools.md finding 19).
+noinst_LIBRARIES += cli/libcli.a
+
+cli_libcli_a_SOURCES = \
+		cli/UnpackCli.h \
+		cli/UnpackCli.cc
+
+# --- rfaUnpack -------------------------------------------------------------
+
+rfaUnpack_SOURCES = \
+		src_rfaUnpack/rfaUnpack.cc \
+		cli/UnpackCli.h \
+		tools_config.h
+
+rfaUnpack_LDADD = \
+		cli/libcli.a \
+		rfa/librfa.a \
+		third_party/minilzo/libminilzo.a \
+		libcommon/libcommon.a \
+		cpputils/io/libcpputilsio.a \
+		cpputils/cpputilsshared/libcpputilsshared.a \
+		cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a
+
 # vendored third-party LZO1X codec (see third_party/minilzo/README.md).
 # It gets its own CPPFLAGS because AM_CPPFLAGS carries -std=c++20, which is not a
 # valid option for a C translation unit.
@@ -209,10 +236,13 @@ test_rfa_SOURCES = \
 		src_test_rfa/test_testcommon.cc \
 		src_test_rfa/test_debuglog.h \
 		src_test_rfa/test_debuglog.cc \
+		src_test_rfa/test_rfa_cli.h \
+		src_test_rfa/test_rfa_cli.cc \
 		tools_config.h
 
 test_rfa_LDADD = \
 		testcommon/libtestcommon.a \
+		cli/libcli.a \
 		libcommon/libcommon.a \
 		rfa/librfa.a \
 		third_party/minilzo/libminilzo.a \

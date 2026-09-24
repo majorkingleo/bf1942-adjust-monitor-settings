@@ -14,6 +14,7 @@ TestCasePtr test_debuglog_argv_takes_the_equals_form();
 TestCasePtr test_debuglog_argv_absent_means_no_log_file();
 TestCasePtr test_debuglog_argv_without_a_value_is_an_error();
 TestCasePtr test_debuglog_debug_flag_is_opt_in();
+TestCasePtr test_debuglog_strip_options_leaves_the_tool_arguments();
 TestCasePtr test_debuglog_session_writes_a_timestamped_line();
 TestCasePtr test_debuglog_second_session_appends();
 TestCasePtr test_debuglog_session_without_a_backend_writes_nothing();

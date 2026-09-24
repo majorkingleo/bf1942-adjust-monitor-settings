@@ -51,6 +51,8 @@ INSTALL
 adjust_monitor_settings.exe
 create_desktop_icons.exe
 list_monitor_resolutions.exe
+rfaUnpack.exe
+rfaPack.exe
 
 # eclipse stuff
 .cproject

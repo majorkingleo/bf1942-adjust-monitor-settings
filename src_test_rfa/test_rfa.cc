@@ -17,6 +17,7 @@
 #include "test_debuglog.h"
 #include "test_lzo.h"
 #include "test_rfa_archive.h"
+#include "test_rfa_cli.h"
 #include "test_rfa_format.h"
 #include "test_rfa_writer.h"
 #include "test_testcommon.h"
@@ -50,6 +51,7 @@ int main( int argc, char ** argv )
 	test_cases.push_back( test_debuglog_argv_absent_means_no_log_file() );
 	test_cases.push_back( test_debuglog_argv_without_a_value_is_an_error() );
 	test_cases.push_back( test_debuglog_debug_flag_is_opt_in() );
+	test_cases.push_back( test_debuglog_strip_options_leaves_the_tool_arguments() );
 	test_cases.push_back( test_debuglog_session_writes_a_timestamped_line() );
 	test_cases.push_back( test_debuglog_second_session_appends() );
 	test_cases.push_back( test_debuglog_session_without_a_backend_writes_nothing() );
@@ -109,6 +111,17 @@ int main( int argc, char ** argv )
 	test_cases.push_back( test_writer_missing_source_leaves_no_archive() );
 	test_cases.push_back( test_writer_matches_the_golden_store_archive_byte_for_byte() );
 	test_cases.push_back( test_writer_compress_archive_is_interchangeable_with_the_oracle() );
+
+	// --- CLI: rfaUnpack ---------------------------------------------------
+	test_cases.push_back( test_cli_usage_without_arguments() );
+	test_cases.push_back( test_cli_missing_target_directory_stops_before_loading() );
+	test_cases.push_back( test_cli_full_extract_writes_every_entry() );
+	test_cases.push_back( test_cli_index_selects_the_entry_at_that_position() );
+	test_cases.push_back( test_cli_index_out_of_range_is_reported_but_not_fatal() );
+	test_cases.push_back( test_cli_list_extracts_full_internal_paths() );
+	test_cases.push_back( test_cli_list_rejects_a_basename_like_the_original() );
+	test_cases.push_back( test_cli_f_accepts_a_basename_unlike_the_original() );
+	test_cases.push_back( test_cli_full_extract_of_the_fh_archive_matches_the_reader() );
 
 	return run_testcases( argc, argv, "rfa", test_cases );
 }

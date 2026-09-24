@@ -19,7 +19,9 @@ Makefiles, so `bin_PROGRAMS` links next to the top-level `Makefile`.
 | `src_adjust_monitor_settings/` | `adjust_monitor_settings.cc` |
 | `src_create_desktop_icons/` | `create_desktop_icons.cc`, `ShortcutProvider.{h,cc}` |
 | `src_list_monitor_resolutions/` | `list_monitor_resolutions.cc` |
+| `cli/` | `libcli.a` — the command lines of the `.rfa` tools (`UnpackCli.*`, `PackCli.*` to come). A **library**, so the tests can call the same entry points the programs call: spawning the binaries from a test is not viable (`PLAN_rfa_tools.md` finding 19) |
 | `rfa/` | `librfa.a` — `.rfa` container reader/writer plus the LZO1X wrapper |
+| `src_rfaUnpack/` | `rfaUnpack.cc` — wrapper over `cli/` |
 | `testcommon/` | harness library for `make check` |
 | `src_test_rfa/` | one `test_<subject>.{h,cc}` pair per subject |
 | `third_party/minilzo/` | vendored miniLZO (needs its own `CPPFLAGS`, see below) |

@@ -28,6 +28,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace AsyncOut {
 	class Debug;
@@ -48,6 +49,15 @@ std::string log_file_from_argv( int argc, char ** argv );
 
 /// True when --debug is present, which adds the console backend.
 bool debug_flag_from_argv( int argc, char ** argv );
+
+/**
+ * Returns argv without ToolLog's own switches, args[0] included.
+ *
+ * A tool that parses positional arguments must not see them: without this,
+ * `tool.exe --log-file out.log archive.rfa` would read `out.log` as the archive. The value
+ * of `--log-file` is dropped along with the switch.
+ */
+std::vector<std::string> strip_options( int argc, char ** argv );
 
 /**
  * Installs the debug frontend as Tools::x_debug and runs the backend loop.

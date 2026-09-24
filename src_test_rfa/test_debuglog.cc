@@ -174,6 +174,42 @@ TestCasePtr test_debuglog_debug_flag_is_opt_in()
 		} );
 }
 
+TestCasePtr test_debuglog_strip_options_leaves_the_tool_arguments()
+{
+	// rfaUnpack takes positional arguments, so a --log-file path that reached its own
+	// parser would be read as the archive.
+	return std::make_shared<TestCaseFuncNoInp>(
+		"debuglog_strip_options_leaves_the_tool_arguments", true, []() {
+			std::vector<char *> argv = {
+				const_cast<char *>( "tool.exe" ),
+				const_cast<char *>( "--log-file" ),
+				const_cast<char *>( "out.log" ),
+				const_cast<char *>( "--debug" ),
+				const_cast<char *>( "archive.rfa" ),
+				const_cast<char *>( "-i0" )
+			};
+
+			const std::vector<std::string> stripped =
+				ToolLog::strip_options( static_cast<int>( argv.size() ), argv.data() );
+
+			if( stripped.size() != 3 || stripped[0] != "tool.exe" ||
+			    stripped[1] != "archive.rfa" || stripped[2] != "-i0" ) {
+				return false;
+			}
+
+			std::vector<char *> equals = {
+				const_cast<char *>( "tool.exe" ),
+				const_cast<char *>( "--log-file=out.log" ),
+				const_cast<char *>( "archive.rfa" )
+			};
+
+			const std::vector<std::string> stripped_equals =
+				ToolLog::strip_options( static_cast<int>( equals.size() ), equals.data() );
+
+			return stripped_equals.size() == 2 && stripped_equals[1] == "archive.rfa";
+		} );
+}
+
 TestCasePtr test_debuglog_session_writes_a_timestamped_line()
 {
 	// The session is scoped so its destructor runs before the file is read: that is the

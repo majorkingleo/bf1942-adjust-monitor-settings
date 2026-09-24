@@ -260,8 +260,11 @@ bf1942-adjust-monitor-settings/
     ThreadPool.cc/.h                     // or reuse cpputils/thread
   third_party/minilzo/                   // vendored miniLZO: minilzo.c, minilzo.h, lzoconf.h
                                          //   deliberately NOT under cpputils/ - see note below
-  src_rfaPack/rfaPack.cc                 <- CLI program
-  src_rfaUnpack/rfaUnpack.cc             <- CLI program
+  cli/                                   <- libcli.a: the command lines themselves,
+    UnpackCli.cc/.h                        //   a library so the tests can call them
+    PackCli.cc/.h                          //   directly (finding 19)
+  src_rfaUnpack/rfaUnpack.cc             <- CLI program, thin wrapper over cli/
+  src_rfaPack/rfaPack.cc                 <- CLI program, thin wrapper over cli/
   testcommon/                            <- cpputilstest-style harness
     TestUtils.cc/.h
     ColBuilder.cc/.h
@@ -393,7 +396,7 @@ the oracle's LZO version, which buys nothing.
 Peak writer memory is bounded by the largest single file (source plus its encoded block),
 not by the archive, because files are encoded and appended one at a time.
 
-### Phase 3 — CLI tools
+### Phase 3 — CLI tools — 🔄 `rfaUnpack` done, `rfaPack` next
 1. `rfaUnpack.cc` / `rfaPack.cc` reproducing §2.4 exactly — **including the chatter strings**,
    so existing pipelines and the `.ps1` skills keep working.
 2. Compatibility tests: for each fixture, run **ours** and the **original oracle** on the same
@@ -519,8 +522,8 @@ in this repo, since `bf_pablov_mod` does not have one.
    vendored miniLZO. Done.
 3. ✅ Phase 2 — `RfaArchive`, `LzoCodec`, `RfaWriter` with the variant/chunk/writer tests
    and the oracle comparison. Done except `-u`.
-4. ▶ **Next: Phase 3** — both CLIs, then the oracle-comparison suite driven by
-   `tools/rfa_golden.py`.
+4. 🔄 **Phase 3, part 1 — `rfaUnpack` done** (2026-09-24). Next: `rfaPack`, then the CLI
+   comparison suite driven by `tools/rfa_golden.py`.
 
 > Before writing `-u`: the original's update semantics are still **unknown**, and the CLI
 > reference records nothing about the mode. Probe it first, with the controlled-archive
@@ -643,3 +646,49 @@ Worth noting how this was established: rule 20 was only visible because every ca
 compared against a *fresh pack*, and rule 23 only because the fields were patched to values
 the packer never produces. Reading the output and reasoning about what the code "must" do
 would have produced a wrong `-u` design in both cases — the same lesson as findings 15 and 16.
+
+### Phase 3, part 1: `rfaUnpack` — DONE (2026-09-24)
+
+Delivered: `cli/UnpackCli.{h,cc}`, `src_rfaUnpack/rfaUnpack.cc`,
+`src_test_rfa/test_rfa_cli.{h,cc}` (9 testcases), `rfaUnpack.exe`. `make check` → **PASS, 78/78**.
+
+**The command line is a library, not a program.** `cli/UnpackCli.cc` holds
+`cli::run_unpack( args, out )`; the program is a three-line wrapper. Spawning the binary from a
+test was already ruled out (finding 19), and calling the same entry point the program calls is
+hermetic, fast, and hands the test the chatter as a string to assert on. `cli/libcli.a` is where
+`PackCli` goes too.
+
+**Verification against the oracle.** Every unpack scenario in `tests/golden/oracle-cli.json` was
+re-run through our binary and compared as a *set of lines* — the golden's own caveat is that the
+original's order is not stable under redirection — after applying the golden's normalisation
+(`{TMP}`, `{ARCHIVE}`, `{LISTFILE}`, `{ADDR}`):
+
+| Scenario | rc ours / oracle | Lines |
+|---|---|---|
+| `unpack_no_args` | 1 / 1 | identical |
+| `unpack_missing_outdir` | 1 / 1 | identical |
+| `unpack_index_0` | 0 / 0 | identical |
+| `unpack_index_out_of_range` | 0 / 0 | identical |
+| `unpack_list_full_paths` | 0 / 0 | identical |
+| `unpack_list_basename` | 0 / 0 | identical |
+| `unpack_full_tiny` | 0 / 0 | identical |
+| `unpack_f_broken` | 0 / 0 | **intended divergence** — D9 |
+
+And the Phase 3 exit gate itself: extracting `tests/data/fh/Battle_Of_Pavlov-1942.rfa` with ours
+and with `bin\rfaUnpack.orig.exe` produced **251 files on both sides, with identical paths and an
+identical SHA-256 for every single file**. That is the only *external* check of the writer's
+output; the in-suite equivalent compares against `PayloadReader`, whose own external evidence is
+Phase 2's oracle-written golden archives.
+
+**Decisions taken here:**
+
+| # | Question | Decision |
+|---|---|---|
+| D9 | `-f` | **Fixed.** The shipped build matches nothing with `-f` (pinned as `unpack_f_broken`) and Phase 3 asked for real matching, so ours tries the full internal path and then the basename. Everything else about the switch, including the chatter, is identical to the oracle's |
+| D10 | Exit codes | **0 on success, 1 for usage/argument/I/O failure, and deliberately 0 for selection misses.** `-i9999` and an unresolvable name both exit 0 in the original and the golden pins that. The earlier "2 for usage" idea is dropped — it would break `unpack_no_args` |
+| D11 | `ExtractToPath` omitted | The golden never exercises it. Ours falls back to `.`, which keeps the tool usable. Marked as unpinned rather than guessed at |
+| D12 | Unpinned failure text | An unreadable archive or list file gets `Error! Cannot open archive: …` / `Error! Cannot open file list: …` and exit 1. No captured scenario reaches those paths, so the strings are ours, not reproductions |
+
+**Not yet done:** `rfaPack` — the whole program, including `-u` per §2.5 and D6–D8. Also
+untested: `unpackedSize_MB` is integer-MB division, and the only golden covering it is a 0 MB
+archive, so the rounding for a large archive is unverified.

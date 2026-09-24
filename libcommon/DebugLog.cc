@@ -74,6 +74,35 @@ bool debug_flag_from_argv( int argc, char ** argv )
 	return false;
 }
 
+std::vector<std::string> strip_options( int argc, char ** argv )
+{
+	const std::string with_equal = std::string( LOG_FILE_OPTION ) + "=";
+
+	std::vector<std::string> stripped;
+
+	for( int i = 0; i < argc; ++i ) {
+
+		if( !argv[i] ) {
+			continue;
+		}
+
+		const std::string arg = argv[i];
+
+		if( arg == LOG_FILE_OPTION ) {
+			++i;   // drop the switch and its value
+			continue;
+		}
+
+		if( arg == DEBUG_OPTION || arg.rfind( with_equal, 0 ) == 0 ) {
+			continue;
+		}
+
+		stripped.push_back( arg );
+	}
+
+	return stripped;
+}
+
 Session::Session( const std::string & log_file, bool console )
 {
 	// Backends first: if the log file cannot be opened this throws while nothing is

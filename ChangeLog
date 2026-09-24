@@ -1,3 +1,36 @@
+commit 942ec38235105fe3ad58769dd82e029cd9139b2f
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 17:12:24 2026 +0200
+
+    Log debug messages like the lotr_analyzer reference
+    
+    Add ToolLog::Session to libcommon. It installs an AsyncOut frontend as
+    Tools::x_debug, optionally subscribes a timestamped file backend and a
+    console backend, and owns the logger thread. Unlike the reference, which
+    detaches its threads in main() and polls a quit flag, the session joins
+    in its destructor, so a tool keeps one object alive and gets a
+    guaranteed final drain.
+    
+    The three monitor tools call it as the first statement of main() and
+    emit CPPDEBUG messages. The log file is requested with --log-file <path>;
+    --debug adds the console backend. Both are opt-in, so
+    list_monitor_resolutions.exe still prints its machine-readable list
+    unchanged.
+    
+    Building this needed cpputils/io, which upstream keeps out of
+    libcpputilsshared.a, so it is built here as cpputils/io/libcpputilsio.a.
+    It requires -liconv: read_file.cc implements ReadFile::convert with
+    iconv and DetectLocale calls it, and the link fails with "undefined
+    reference to iconv_open" without it.
+    
+    New test subject src_test_rfa/test_debuglog covers the argv parsing, the
+    line shape, append instead of truncate, and a frontend with no backend
+    writing nothing. 68 testcases, all green.
+    
+    Also corrects the debug-logging skill: the timestamp does carry
+    milliseconds, because %S prints the fractional part when the time point
+    is finer than seconds. Its Makefile.am snippet was missing -liconv.
+
 commit ef3d3d4ffb2de6200fe7d33c288ad8070784dc20
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 16:51:58 2026 +0200
