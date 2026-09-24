@@ -732,6 +732,62 @@ it — but it now prints a warning on **stderr** (stdout stays golden-exact) nam
 because producing something the target cannot read must not be silent. Store mode is unaffected
 and remains byte-identical.
 
+#### … and the engine is a different decoder (2026-09-24)
+
+Finding 27 says "the shipped `.rfa` tools cannot read our `-Compress` output". It says nothing
+about the game, so that was tested: our `-Compress` pack of the vendor `menu` tree (618 entries,
+10,064,159 B) was installed as `Mods\bf1942\Archives\menu.rfa`, and `BF1942.exe +game bf1942`
+came up to its **main menu**. The shipping `menu.rfa` is itself version 1 with 618 chunked
+entries, so the engine decodes an LZO stream there every launch — and it decodes ours too.
+
+The old tools' failure, measured properly on the same archive, turns out to be narrower than the
+earlier single-file probes suggested:
+
+| | result |
+|---|---|
+| our reader, full round trip | 618/618 files identical to the vendor tree |
+| the 2003 decoder on our pack | extracted **11 files correctly**, then `ERROR! Extract() fileSize: 50942 should be: 51538` and stopped |
+| the 2003 decoder on the vendor tool's own `-Compress` pack | 618 files, no error |
+
+So it is not "every match opcode is rejected" — it is **data-dependent**, and the probes that
+produced the earlier wording were too small to show it. Eleven menu entries decoded before one
+came out 596 bytes short, which means the two decoders agree on most of the format and diverge
+on one construct.
+
+#### The era compressor is reproducible, and ours is a different one
+
+Comparing each **shipping** archive with the vendor tool's own re-pack of its extracted tree,
+entry by entry and by *payload* rather than by offset (the shipping files do not keep their data
+blocks in table order, which makes a whole-region comparison meaningless):
+
+| archive | payloads byte-identical | sizes differing | table order |
+|---|---|---|---|
+| `menu.rfa` (618 entries) | **618 / 618** | 0 | differs |
+| FH `Battle_Of_Pavlov-1942.rfa` (251 entries) | **251 / 251** | 0 | differs |
+
+DICE's packer and RFA Pack 1.7 therefore share **one** LZO encoder, reproducible byte for byte.
+Only the container differs: entry order, the placement of data blocks, `reserved1` (the shipping
+archives store 0 where rfaPack writes 1253856) and `flags`. This also explains the size identity
+noted in the phase record below — it is not a coincidence.
+
+That reframes the size penalty as a purely algorithmic question. For 200 bytes of `ab`, the era
+encoder emits **10 bytes** and miniLZO 2.10 emits **29**; over the whole `menu` tree ours is 26%
+larger (10,064,159 vs 7,963,020 B). The `lzo1x_1` we vendor is not the encoder behind these
+archives.
+
+**Open question, deliberately not guessed at:** which LZO variant produces those streams. The
+era encoder's output for repetitive input uses the textbook long-match form
+(`13 61 62 20 a5 04 00 11 00 00` = 2 literals, then a 198-byte match at distance 2, then the end
+marker), so the candidate is a stronger variant of the same family — LZO1X-999 being the obvious
+one — not a different codec. Testing it needs LZO sources: there is no LZO library on this
+machine (`/usr/include/lzo`, `/usr/lib/liblzo*` and the mingw sysroot are all empty) and no
+Python LZO module, so it is a download-and-try task, and vendoring a second codec is a
+dependency decision belonging to D4 rather than to a probe.
+
+If it turns out to be LZO1X-999, compress mode becomes byte-identical to the oracle's **and**
+readable by the old tools — findings 17 and 27 both close. Until then: store mode is the
+interoperable one, compress mode is for the engine and for us.
+
 ### Finding 28 — the original sorts entries by name, folded to UPPERCASE (2026-09-24)
 
 Found while repacking the real vendor `menu.rfa` (618 entries) to try it in the game. Our store
