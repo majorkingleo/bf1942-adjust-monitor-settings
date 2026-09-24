@@ -1,5 +1,5 @@
 /**
- * Testcases for the vendored miniLZO codec.
+ * Testcases for the vendored LZO codec, and for the two compression variants the archives need.
  *
  * @author Copyright (c) 2026
  */
@@ -8,10 +8,11 @@
 
 #include "rfa/LzoCodec.h"
 
-#include "minilzo.h"
+#include "lzo/lzo1x.h"
 
 #include <algorithm>
 #include <cstdint>
+#include <iostream>
 #include <vector>
 
 namespace {
@@ -327,5 +328,86 @@ TestCasePtr test_lzo_codec_max_compressed_size_is_sufficient()
 
 			return compressed.size() <= rfa::LzoCodec::max_compressed_size( original.size() )
 			    && compressed.size() > original.size();
+		} );
+}
+TestCasePtr test_lzo_codec_era_variant_reproduces_the_archive_encoder()
+{
+	// The one expectation in this suite that comes from a shipping archive rather than from our
+	// own earlier behaviour: for 200 bytes of "ab" the BF1942 encoder emits exactly these ten
+	// bytes, read out of bin\rfaPack.orig.exe's own output and out of menu.rfa.
+	//
+	// It is here because it is the cheapest possible proof that LzoVariant::Era really is the
+	// era encoder. If a future change swaps the variant, or the vendored LZO is updated and its
+	// 999 compressor starts making different choices, this fails immediately instead of
+	// silently producing archives the shipped tools cannot read (finding 27).
+	static const unsigned char expected[] = {
+		0x13, 'a', 'b', 0x20, 0xA5, 0x04, 0x00, 0x11, 0x00, 0x00
+	};
+
+	return std::make_shared<TestCaseFuncNoInp>(
+		"lzo_codec_era_variant_reproduces_the_archive_encoder", true, []() {
+			std::vector<unsigned char> input( 200 );
+
+			for( std::size_t i = 0; i < input.size(); ++i ) {
+				input[i] = (unsigned char)( ( i % 2 ) ? 'b' : 'a' );
+			}
+
+			rfa::LzoCodec codec;
+			std::vector<unsigned char> compressed;
+
+			if( !codec.compress( input.data(), input.size(), compressed, rfa::LzoVariant::Era ) ) {
+				return false;
+			}
+
+			if( compressed.size() != sizeof( expected ) ) {
+				std::cout << "[rfa] era variant produced " << compressed.size()
+				          << " bytes, the archive encoder produces " << sizeof( expected ) << "\n";
+				return false;
+			}
+
+			for( std::size_t i = 0; i < sizeof( expected ); ++i ) {
+				if( compressed[i] != expected[i] ) {
+					std::cout << "[rfa] era variant stream differs at byte " << i << "\n";
+					return false;
+				}
+			}
+
+			return true;
+		} );
+}
+
+TestCasePtr test_lzo_codec_fast_variant_is_the_other_compressor()
+{
+	// The two variants must not silently become the same one. 200 bytes of "ab" is the case
+	// where they differ most sharply: 29 bytes for LZO1X-1 against 10 for the era encoder.
+	return std::make_shared<TestCaseFuncNoInp>(
+		"lzo_codec_fast_variant_is_the_other_compressor", true, []() {
+			std::vector<unsigned char> input( 200 );
+
+			for( std::size_t i = 0; i < input.size(); ++i ) {
+				input[i] = (unsigned char)( ( i % 2 ) ? 'b' : 'a' );
+			}
+
+			rfa::LzoCodec codec;
+			std::vector<unsigned char> era;
+			std::vector<unsigned char> fast;
+
+			if( !codec.compress( input.data(), input.size(), era, rfa::LzoVariant::Era )
+			 || !codec.compress( input.data(), input.size(), fast, rfa::LzoVariant::Fast ) ) {
+				return false;
+			}
+
+			if( era == fast ) {
+				std::cout << "[rfa] both variants produced the same stream\n";
+				return false;
+			}
+
+			// both must still round-trip: the fast one is larger, not broken
+			std::vector<unsigned char> restored( input.size() );
+
+			return fast.size() > era.size()
+			    && rfa::LzoCodec::decompress( fast.data(), fast.size(),
+			                                  restored.data(), input.size() )
+			    && restored == input;
 		} );
 }

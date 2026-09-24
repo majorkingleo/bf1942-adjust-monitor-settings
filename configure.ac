@@ -54,6 +54,19 @@ AC_PROG_CXX
 AC_LANG(C++)
 AC_PROG_INSTALL
 
+dnl Default to -O3 instead of autoconf's -g -O2.
+dnl
+dnl The LZO compressors dominate this tool set's runtime and they are plain C in tight loops,
+dnl so the extra inlining and unrolling are worth having. A caller-supplied CFLAGS/CXXFLAGS
+dnl still wins, and `make check` pins the compressed streams byte for byte - so a codegen change
+dnl that altered the codec's OUTPUT would fail the suite rather than slip through.
+if test "x$CFLAGS" = "x-g -O2"; then
+  CFLAGS="-g -O3"
+fi
+if test "x$CXXFLAGS" = "x-g -O2"; then
+  CXXFLAGS="-g -O3"
+fi
+
 ac_extra_cxxx_flags=""
 EXTRA_LDFLAGS=""
 

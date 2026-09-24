@@ -139,6 +139,7 @@ struct EncodedEntry
  */
 bool encode_entry( const SourceFile & file,
                    CompressionPolicy policy,
+                   LzoVariant variant,
                    unsigned threads,
                    EncodedEntry & out,
                    std::string * error )
@@ -178,7 +179,7 @@ bool encode_entry( const SourceFile & file,
 
 		std::vector<unsigned char> compressed;
 
-		if( !codecs[worker].compress( source.data() + begin, end - begin, compressed ) ) {
+		if( !codecs[worker].compress( source.data() + begin, end - begin, compressed, variant ) ) {
 			if( !failed.exchange( true ) ) {
 				failure = "entry '" + file.name + "': chunk " + std::to_string( index )
 				        + " failed to compress";
@@ -444,7 +445,7 @@ bool RfaWriter::write( const std::vector<SourceFile> & files,
 		EncodedEntry entry;
 		std::string entry_error;
 
-		if( !encode_entry( *file, options.policy, threads, entry, &entry_error ) ) {
+		if( !encode_entry( *file, options.policy, options.lzo, threads, entry, &entry_error ) ) {
 			return abandon( entry_error );
 		}
 

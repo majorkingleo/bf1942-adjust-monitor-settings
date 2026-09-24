@@ -157,12 +157,12 @@ endif
 # ---------------------------------------------------------------------------
 
 AM_CPPFLAGS += -I$(top_srcdir)/testcommon
-AM_CPPFLAGS += -I$(top_srcdir)/third_party/minilzo
+AM_CPPFLAGS += -I$(top_srcdir)/third_party/lzo/include
 
 noinst_LIBRARIES += testcommon/libtestcommon.a
 
 # core .rfa library: container reader/writer plus the codec wrapper.
-# It inherits AM_CPPFLAGS, which already carries -I third_party/minilzo.
+# It inherits AM_CPPFLAGS, which already carries -I third_party/lzo/include.
 noinst_LIBRARIES += rfa/librfa.a
 
 rfa_librfa_a_SOURCES = \
@@ -196,7 +196,7 @@ rfaPack_SOURCES = \
 rfaPack_LDADD = \
 		cli/libcli.a \
 		rfa/librfa.a \
-		third_party/minilzo/libminilzo.a \
+		third_party/lzo/liblzo.a \
 		libcommon/libcommon.a \
 		cpputils/io/libcpputilsio.a \
 		cpputils/cpputilsshared/libcpputilsshared.a \
@@ -212,24 +212,46 @@ rfaUnpack_SOURCES = \
 rfaUnpack_LDADD = \
 		cli/libcli.a \
 		rfa/librfa.a \
-		third_party/minilzo/libminilzo.a \
+		third_party/lzo/liblzo.a \
 		libcommon/libcommon.a \
 		cpputils/io/libcpputilsio.a \
 		cpputils/cpputilsshared/libcpputilsshared.a \
 		cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a
 
-# vendored third-party LZO1X codec (see third_party/minilzo/README.md).
-# It gets its own CPPFLAGS because AM_CPPFLAGS carries -std=c++20, which is not a
-# valid option for a C translation unit.
-noinst_LIBRARIES += third_party/minilzo/libminilzo.a
+# vendored third-party LZO1X codec (see third_party/lzo/README.md).
+#
+# Five translation units rather than the whole library: that is the closure the linker pulls
+# in for lzo1x_999_compress_level + lzo1x_1_compress + lzo1x_decompress_safe, measured with
+# -Wl,-Map. It gets its own CPPFLAGS because AM_CPPFLAGS carries -std=c++20, which is not a
+# valid option for a C translation unit - and because the internal headers are included as
+# "lzo_conf.h" from the sources, so src/ has to be on the include path too.
+noinst_LIBRARIES += third_party/lzo/liblzo.a
 
-third_party_minilzo_libminilzo_a_SOURCES = \
-		third_party/minilzo/minilzo.c \
-		third_party/minilzo/minilzo.h \
-		third_party/minilzo/lzoconf.h \
-		third_party/minilzo/lzodefs.h
+third_party_lzo_liblzo_a_SOURCES = \
+		third_party/lzo/src/lzo_init.c \
+		third_party/lzo/src/lzo1x_1.c \
+		third_party/lzo/src/lzo1x_1o.c \
+		third_party/lzo/src/lzo1x_9x.c \
+		third_party/lzo/src/lzo1x_d2.c \
+		third_party/lzo/src/config1x.h \
+		third_party/lzo/src/lzo_conf.h \
+		third_party/lzo/src/lzo_dict.h \
+		third_party/lzo/src/lzo_dll.ch \
+		third_party/lzo/src/lzo_func.h \
+		third_party/lzo/src/lzo_mchw.ch \
+		third_party/lzo/src/lzo_ptr.h \
+		third_party/lzo/src/lzo_supp.h \
+		third_party/lzo/src/lzo_swd.ch \
+		third_party/lzo/src/lzo1_d.ch \
+		third_party/lzo/src/lzo1x_c.ch \
+		third_party/lzo/src/lzo1x_d.ch \
+		third_party/lzo/include/lzo/lzo1x.h \
+		third_party/lzo/include/lzo/lzoconf.h \
+		third_party/lzo/include/lzo/lzodefs.h
 
-third_party_minilzo_libminilzo_a_CPPFLAGS = -I$(top_srcdir)/third_party/minilzo
+third_party_lzo_liblzo_a_CPPFLAGS = \
+		-I$(top_srcdir)/third_party/lzo/include \
+		-I$(top_srcdir)/third_party/lzo/src
 
 testcommon_libtestcommon_a_SOURCES = \
 		testcommon/TestUtils.h \
@@ -264,7 +286,7 @@ test_rfa_LDADD = \
 		cli/libcli.a \
 		libcommon/libcommon.a \
 		rfa/librfa.a \
-		third_party/minilzo/libminilzo.a \
+		third_party/lzo/liblzo.a \
 		cpputils/io/libcpputilsio.a \
 		cpputils/cpputilsshared/libcpputilsshared.a \
 		cpputils/cpputilsshared/cpputilsformat/libcpputilsformat.a

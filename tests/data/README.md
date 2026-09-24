@@ -78,4 +78,7 @@ are a fixed artefact that cannot drift with the oracle.
 Regenerate with `tools/rfa_golden_archives.py` (it re-runs the oracle and rewrites
 `MANIFEST.txt`). `writer_matches_the_golden_store_archive_byte_for_byte` requires the store
 archive to match **byte for byte**; the compress archive is compared semantically instead,
-because RFA Pack 1.7's 2003-era LZO emits different-but-equivalent streams to miniLZO 2.10.
+because that testcase packs with LZO1X-1 on purpose to have one that runs the other variant.
+The default encoder is the era's LZO1X-999 at level 8, and with it the compress output is
+byte-identical to `oracle-compress.rfa` as well — verified on the 618-entry `menu.rfa` as well
+as on this tree (`PLAN_rfa_tools.md` findings 31 and 17).

@@ -24,7 +24,7 @@ Makefiles, so `bin_PROGRAMS` links next to the top-level `Makefile`.
 | `src_rfaUnpack/` | `rfaUnpack.cc` — wrapper over `cli/` |
 | `testcommon/` | harness library for `make check` |
 | `src_test_rfa/` | one `test_<subject>.{h,cc}` pair per subject |
-| `third_party/minilzo/` | vendored miniLZO (needs its own `CPPFLAGS`, see below) |
+| `third_party/lzo/` | vendored LZO — five sources plus their header closure, holding the **LZO1X-999** compressor the archives actually use (needs its own `CPPFLAGS`, see below) |
 
 `tools_config.h` must stay in the **repo root**. `cpputils/` headers reach it with
 `#include "../../../tools_config.h"`, which only resolves because the command line carries
@@ -76,7 +76,7 @@ C:\cygwin64\bin\bash.exe -lc "cd '<workspace>' && make"
   `std::system` goes through cmd.exe, which mangles both forward-slash and absolute paths.
 * `AM_CPPFLAGS` contains `-std=c++20`, which is invalid for a C translation unit.
   Any `.c` file added to this tree needs its own per-target `CPPFLAGS`, as
-  `third_party/minilzo/libminilzo.a` does.
+  `third_party/lzo/liblzo.a` does.
 * `cpputils/io` is not part of `libcpputilsshared.a`; this tree builds it separately as
   `cpputils/io/libcpputilsio.a` (CpputilsDebug, OutDebug, DetectLocale, ColoredOutput,
   read_file). It needs **`-liconv`** in `LIBS`: `read_file.cc` implements
@@ -99,9 +99,14 @@ Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, an
 
 ## Critical facts (verified — do not re-derive from the internet)
 
-* RFA payload compression is **LZO1X** (Oberhumer LZO1X-1), applied **independently per
-  32 KiB chunk**. It is **not** zlib/deflate, not FastLZ, not RefPack. miniLZO's
-  `lzo1x_1_compress` / `lzo1x_decompress` are compatible.
+* RFA payload compression is **LZO1X**, applied **independently per 32 KiB chunk**. It is
+  **not** zlib/deflate, not FastLZ, not RefPack.
+* ⚠️ The compressor is **LZO1X-999 at compression level 8**, *not* LZO1X-1. Measured: for
+  200 bytes of `ab` the era encoder emits 10 bytes where `lzo1x_1` emits 29, and on the `menu`
+  tree 999 is 21% smaller — our `-Compress` output is byte-identical to `rfaPack.orig.exe`'s
+  only because we use 999 (finding 31). `--lzo-fast` selects LZO1X-1 deliberately: ~3x faster,
+  visibly larger, and its streams are **not** readable by the shipped 2003 tools (finding 27).
+  The game reads either.
 * ⚠️ The `RefractorForge` "RFA_Format_Notes" found online describe a **different** custom
   LZ77 codec for **Battlefield Vietnam**. They do **not** apply to BF1942.
 * The per-entry data block has **two variants** and you must choose between them from the

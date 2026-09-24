@@ -1,9 +1,9 @@
 /**
- * Testcases for the vendored miniLZO codec.
+ * Testcases for the vendored LZO codec and for rfa::LzoCodec.
  *
- * Phase 2 will wrap this in rfa::LzoCodec; these tests pin the codec itself, including
- * the encoding facts the RFA format depends on, so a mis-vendored or wrong-version LZO
- * shows up here rather than as corrupt archives later.
+ * These pin the codec itself, including the encoding facts the RFA format depends on and the
+ * two compression variants, so a mis-vendored or wrong-version LZO shows up here rather than as
+ * corrupt or unreadable archives later.
  *
  * @author Copyright (c) 2026
  */
@@ -28,5 +28,7 @@ TestCasePtr test_lzo_codec_roundtrip_via_wrapper();
 TestCasePtr test_lzo_codec_detects_size_mismatch();
 TestCasePtr test_lzo_codec_max_compressed_size_is_sufficient();
 TestCasePtr test_lzo_codec_available();
+TestCasePtr test_lzo_codec_era_variant_reproduces_the_archive_encoder();
+TestCasePtr test_lzo_codec_fast_variant_is_the_other_compressor();
 
 #endif /* SRC_TEST_RFA_TEST_LZO_H_ */

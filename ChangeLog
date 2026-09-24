@@ -1,3 +1,195 @@
+commit 2027b9321bd9b58083363b8259cb4b955743069e
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 22:00:12 2026 +0200
+
+    Identify the codec: LZO1X-999 at level 8, not lzo1x_1
+    
+    Finding 27 left one question open - the era encoder's streams are reproducible, so
+    which encoder produces them - and the answer is the high-compression variant of the
+    same codec at a specific level. The proof is byte-level on shipping archives:
+    
+      1. rfaPack.orig.exe -Compress reproduces the shipping payloads byte for byte
+         (618/618 entries of menu.rfa, 251/251 of the FH Pavlov archive), so one
+         deterministic encoder made them all.
+      2. It is not lzo1x_1: for 200 bytes of "ab" the era encoder emits 10 bytes
+         (13 61 62 20 a5 04 00 11 00 00) where miniLZO emits 29.
+      3. Of every candidate the full LZO 2.10 library offers, only lzo1x_999 produces
+         those 10 bytes.
+      4. Reproduced in the archive's own layout - independent 32 KiB chunks, concatenated
+         - its level-8 output for menu/AirControlsPage1 is SHA-256 identical to the
+         payload in the shipping archive. Six more entries agree, 60 B to 20 049 B,
+         single- and multi-chunk. Level 9 is two bytes smaller and level 7 larger, which
+         is what pins the level at 8 rather than "some 999".
+    
+    tools/lzo_variant/ keeps the probe (probe.c, chunked.c, dump_payload.py) and a README
+    with the reproduction recipe, because the finding is worth nothing without the recipe.
+    Its measured vendoring footprint is five objects, and decompression can stay with the
+    miniLZO already vendored and tested.
+    
+    With this, -Compress should become byte-identical to the oracle AND readable by the
+    old tools, closing findings 17 and 27 together, and the 8-26% size penalty goes away.
+    Costs are recorded too: 999 is much slower per byte and needs ~448 KB of work memory
+    per thread instead of ~16 KB.
+
+commit 10182602b05cbfffad97a6fba1b592ac5c2dea20
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 21:43:10 2026 +0200
+
+    Narrow finding 27: the engine reads our LZO, the 2003 tools do not
+    
+    Three measurements, all on shipping archives rather than fixtures.
+    
+    1. The game accepts our -Compress output. Our pack of the vendor menu tree was
+       installed as Mods\bf1942\Archives\menu.rfa and BF1942 comes up to its main menu.
+       The shipping menu.rfa is itself version 1 with 618 chunked entries, so the engine
+       decodes an LZO stream every launch - and it decodes ours.
+    
+    2. The old tools' failure is data-dependent, not total. On that same archive our
+       reader round-trips 618/618 files, while bin\rfaUnpack.orig.exe extracts 11 files
+       correctly and then stops with "ERROR! Extract() fileSize: 50942 should be: 51538".
+       The earlier wording ("does not accept the match opcodes miniLZO emits") came from
+       probes whose files were too small to show the granularity.
+    
+    3. The era compressor is reproducible and is not lzo1x_1. Comparing each shipping
+       archive with the vendor tool's re-pack of its extracted tree, payload by payload
+       rather than by offset: 618/618 and 251/251 payloads are byte-identical, with zero
+       size differences. DICE's packer and RFA Pack 1.7 share one encoder; only the
+       container differs (entry order, data block placement, reserved1, flags). That is
+       also why the re-packs hit the shipping size exactly.
+    
+       So the size penalty is purely algorithmic: 200 bytes of "ab" cost 10 bytes from the
+       era encoder and 29 from miniLZO 2.10, and our menu pack is 26% larger. Which LZO
+       variant that is stays an open question - there is no LZO library on this machine to
+       test with, and vendoring a second codec is a D4 decision, not a probe.
+    
+    If it turns out to be LZO1X-999, compress mode becomes byte-identical AND readable by
+    the old tools, closing findings 17 and 27 together.
+
+commit ba133b9d51fda7691d0572b2b236b822b51cfcb0
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 21:34:20 2026 +0200
+
+    A chunk can be LZO1X even when its sizes are equal
+    
+    Found by round-tripping the shipping Battle_of_Britain.rfa (548 entries, 46.6 MB)
+    instead of a fixture. Our extraction produced 548 files and one of them was wrong;
+    the vendor tool's extraction of the same archive was right:
+    
+        Bf1942/Levels/Battle_of_Britain/Objects/Willy/Willy.con   stored=46  unc=30
+          chunk 0 : compressed=30  uncompressed=30
+    
+    The payload is an LZO1X stream (1e .. 11 00 00) that compresses to exactly the
+    length of the file it produces, so Chunk::is_compressed() said "verbatim" and
+    PayloadReader handed the compressed bytes back as content - silently, because the
+    length was right. No error, no size check, nothing structural to notice.
+    
+    Our reader now lets the codec decide when the sizes are equal: try LZO, copy
+    verbatim when it refuses. That direction is safe, because lzo1x_decompress_safe
+    rejects non-streams and demands exactly the expected output length - a false
+    positive would require file content to be a valid LZO1X stream of its own.
+    
+    This retires the "iff compressedSize != uncompressedSize" claim in AGENTS.md and
+    in the repo memory: inequality still means compressed, but equality proves
+    nothing. The sizes are a hint, the codec is the verdict.
+    
+    Verified by re-extracting the same archive: 548 of 548 files now identical to the
+    vendor tool's. test_rfa_archive's
+    archive_reads_a_chunk_that_compresses_to_its_own_length builds a one-entry v1
+    archive around the measured 30 bytes, so the trap is pinned without the 46 MB
+    fixture. 88 testcases, all green.
+    
+    PLAN_rfa_tools.md gains finding 30 and the phase 3 part 2 record: the two real
+    archives we round-tripped and installed (both store packs byte-identical to the
+    vendor tool's, both read by the game), the timings - 1.5x faster unpack, 1.8x
+    slower store pack, 21x faster compress - and the note that our LZO output is
+    8-14% larger and unreadable by the 2003 decoder (finding 27), so store mode stays
+    the interchangeable one.
+
+commit 6d4e8b7f3938756a4b838802b085b4677db46336
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 21:23:37 2026 +0200
+
+    Test the rfaPack command line against the golden and the oracle archive
+    
+    Seven testcases, in the two halves this file already used for rfaUnpack: the
+    chatter compared with tests/golden/oracle-cli.json (message presence and exit
+    codes, because the original's line order is not stable under redirection), and
+    the bytes compared with the archive the oracle itself wrote.
+    
+    - cli_pack_no_arguments_matches_the_golden: the usage block verbatim, both
+      trailing spaces included, rc 1.
+    - cli_pack_plain_matches_the_golden and
+      cli_pack_compress_matches_the_golden_and_warns: the golden's pack_plain /
+      pack_compress line sets with the matching UseCompression value. The compress
+      case also pins the deliberate divergence - the golden has an EMPTY stderr
+      there, ours warns about finding 27.
+    - cli_pack_store_output_is_byte_identical_to_the_oracle_archive: drives the CLI
+      over tests/data/golden/tree and compares the FILE it wrote with
+      oracle-store.rfa. Reading the file the CLI created is the one thing the
+      writer's in-memory comparison cannot cover.
+    - cli_pack_switch_matching_is_case_insensitive,
+      cli_pack_update_refuses_and_writes_nothing and
+      cli_pack_missing_source_directory_is_reported: -COMPRESS and -U are honoured,
+      -u is refused and leaves no archive, and a source directory that is not there
+      fails without leaving one either.
+    
+    To make the stderr assertion possible, run_pack() now takes the second stream as
+    a parameter instead of reaching for std::cerr inside - the golden records stdout
+    and stderr separately, so the entry point should expose both.
+    
+    87 testcases, all green.
+
+commit a1e0f41b781f204d7b5a01226a6a7085540ed2dd
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 21:21:03 2026 +0200
+
+    Record the game test: BF1942 reaches its main menu with our menu.rfa
+    
+    The front end mounts Mods\bf1942\Archives\menu.rfa at startup and refuses to
+    start without it, so installing our 618-entry store pack there and watching the
+    menu come up is the one writer check no unit test can make: not another parser's
+    opinion of our bytes, but the engine's.
+    
+    Phase 2's exit gate table gets the matching row, and finding 28 records the swap
+    helper (examples\bf_pablov_mod\work\menu_test\swap_menu.ps1) and the vendor
+    backup next to the archive.
+
+commit 56ea6e11241517f75f81170afcb87ae8a2fa2876
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 21:19:21 2026 +0200
+
+    Add the rfaPack command line, and sort names the way the original does
+    
+    rfaPack (store mode) reproduces bin\rfaPack.orig.exe byte-for-byte, but the
+    five-file golden tree hid a rule that the real menu.rfa exposed: the original
+    compares sibling names in byte order after folding to UPPERCASE, not lowercase
+    and not as raw bytes. A byte comparison put 250 of 618 entry indices in a
+    different order (1,003,071 differing bytes); folding to lowercase still left 68,
+    and the single remaining pair was
+    
+        loadingfull_256x16.dds   /   loading_full_256x16.dds
+    
+    '_' is 0x5F - above 'A' (0x41) and below 'a' (0x61) - so only the direction of
+    the fold separates the two candidates: folding up puts loadingfull first, which
+    is what the original does. Repacking work\menu_test\orig\menu (618 files from
+    the vendor archive) now yields the vendor tool's own SHA-256,
+    AB3C2B9E72080914..., byte for byte at 22,950,118 bytes.
+    
+    - rfa/RfaWriter.cc: name_less() folds to uppercase (ASCII only, so the order
+      cannot depend on the machine's locale) with a documented byte-comparison
+      fallback for names that fold together.
+    - tests/data/golden: the tree now holds InGame/Infantry..., Icon_*/icon_* and
+      loading_full/loadingfull siblings, so the archive the oracle itself wrote pins
+      the rule; a testcase asserts the same order without the oracle. This is the
+      fourth time a fixture too small to contain the ambiguity could not test the
+      rule (findings 1, 15, 16, 28).
+    - cli/PackCli.cc, src_rfaPack: the rfaPack command line. Store mode is
+      byte-identical; -Compress warns on stderr about finding 27; -u is recognised
+      and refused until D6-D8 are decided.
+    - tools/probe_case_ties.py: scans an archive tree for case-insensitive siblings.
+    - PLAN_rfa_tools.md: findings 27 and 28, and the Phase 2 store-mode gate no
+      longer carries the "case-unambiguous trees only" caveat.
+
 commit f1814c02a5867c342ae5ca725d31ab6af16787d0
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 20:40:28 2026 +0200

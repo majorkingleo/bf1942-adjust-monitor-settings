@@ -104,9 +104,15 @@ Invariants, all machine-verified:
 > per additional chunk. The error is invisible on single-chunk entries — which is
 > exactly what the small fixture archives contain, so it survived several passes.
 
-Compression is **LZO1X** (Oberhumer LZO1X-1, as implemented by miniLZO's
-`lzo1x_1_compress` / `lzo1x_decompress`). It is NOT zlib/deflate, NOT FastLZ and
-NOT RefPack — 7-Zip and .NET `DeflateStream` fail on it.
+Compression is **LZO1X**, and specifically **LZO1X-999 at compression level 8**, applied to
+independent 32 KiB chunks. It is NOT zlib/deflate, NOT FastLZ and NOT RefPack — 7-Zip and .NET
+`DeflateStream` fail on it.
+
+> ⚠️ **Not LZO1X-1.** miniLZO, the LZO variant most tools ship, implements LZO1X-1, and using it
+> produces archives 8–26% larger than the originals *and* streams that the 2003 `rfaUnpack.exe`
+> mis-decodes. For 200 bytes of `ab` the era encoder emits 10 bytes where LZO1X-1 emits 29.
+> Measured by reproducing shipping payloads byte for byte; see `PLAN_rfa_tools.md` finding 31 and
+> `tools/lzo_variant/` for the probe.
 
 Verified: packing incompressible N-byte input with `rfaPack.exe -Compress` yields a
 single chunk with `compressedSize == N + 4`, whose payload starts with the LZO1X

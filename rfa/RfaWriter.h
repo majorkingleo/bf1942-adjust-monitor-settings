@@ -19,6 +19,7 @@
 #ifndef RFA_RFAWRITER_H
 #define RFA_RFAWRITER_H
 
+#include "LzoCodec.h"
 #include "RfaFormat.h"
 
 #include <cstdint>
@@ -39,6 +40,12 @@ enum class CompressionPolicy
 struct WriteOptions
 {
 	CompressionPolicy policy = CompressionPolicy::Store;
+
+	/// Which LZO compressor to use when the policy is Compress. The default is the era
+	/// encoder, so our compressed archives are byte-identical to rfaPack.exe's and readable by
+	/// the shipped tools (finding 31). `LzoVariant::Fast` is ~15x faster, ~21% larger, and only
+	/// the game can read it (finding 27) - opt in through `--lzo-fast`.
+	LzoVariant lzo = LzoVariant::Era;
 
 	/// Worker threads used to compress the chunks of one file. 0 means
 	/// std::thread::hardware_concurrency().

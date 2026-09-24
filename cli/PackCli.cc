@@ -50,6 +50,12 @@ const char * const USAGE_BLOCK =
 const char * const UPDATE_SWITCH   = "-u";
 const char * const COMPRESS_SWITCH = "-compress";
 
+/// Our own extension, not in the original's usage text - which is reproduced verbatim and
+/// pinned by the golden, so a new switch must not appear there. Compress with LZO1X-1 instead
+/// of the era's LZO1X-999: ~15x faster, ~21% larger, and the shipped 2003 tools cannot read it
+/// (finding 27). Only the game can.
+const char * const FAST_SWITCH = "--lzo-fast";
+
 struct Options
 {
 	std::string source_dir;
@@ -58,6 +64,7 @@ struct Options
 
 	bool update = false;
 	bool compress = false;
+	bool fast = false;
 
 	/// The three positional arguments are all required; the switches are not.
 	bool complete = false;
@@ -95,6 +102,11 @@ Options parse( const std::vector<std::string> & args )
 
 		if( lowered == COMPRESS_SWITCH ) {
 			options.compress = true;
+			continue;
+		}
+
+		if( lowered == FAST_SWITCH ) {
+			options.fast = true;
 			continue;
 		}
 
@@ -159,15 +171,16 @@ int run_pack( const std::vector<std::string> & args, std::ostream & out, std::os
 
 	out << BANNER << "\n";
 
-	if( options.compress ) {
-		// Finding 27: the 2003-era decoder in RFA Pack 1.7 rejects the match opcodes miniLZO
-		// emits, so a -Compress archive we write cannot be read by the shipped tools - and in
-		// all likelihood not by the game either. The switch still works and the archive is
-		// valid by our own reader, but producing something the target cannot read must not
-		// happen silently. This goes to stderr because every captured golden has an empty
-		// stderr and a packed stdout; stdout stays a faithful reproduction.
-		err << "WARNING! -Compress output is not readable by RFA Pack 1.7 "
-		       "(PLAN_rfa_tools.md finding 27). Use store mode unless the target is ours.\n";
+	if( options.compress && options.fast ) {
+		// Finding 27: the 2003-era decoder in RFA Pack 1.7 rejects the match opcodes LZO1X-1
+		// emits, so a --lzo-fast archive cannot be read by the shipped tools. The default is
+		// the era's own encoder, whose streams they read because those are the streams they
+		// wrote themselves (finding 31) - so this warning is about the opt-in path only.
+		//
+		// It goes to stderr because every captured golden has an empty stderr and a packed
+		// stdout; stdout stays a faithful reproduction of the original.
+		err << "WARNING! --lzo-fast output is not readable by RFA Pack 1.7 "
+		       "(PLAN_rfa_tools.md finding 27). The default encoder is.\n";
 	}
 
 	if( options.update ) {
@@ -192,6 +205,7 @@ int run_pack( const std::vector<std::string> & args, std::ostream & out, std::os
 	rfa::WriteOptions write_options;
 	write_options.policy = options.compress ? rfa::CompressionPolicy::Compress
 	                                        : rfa::CompressionPolicy::Store;
+	write_options.lzo = options.fast ? rfa::LzoVariant::Fast : rfa::LzoVariant::Era;
 
 	const auto started = std::chrono::steady_clock::now();
 

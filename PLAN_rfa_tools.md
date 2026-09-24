@@ -381,7 +381,7 @@ runner's own failure paths were verified by hand (`-t 99` → exit 1, `--bogus` 
 | determinism: 1 vs 8 threads → identical bytes | ✅ |
 | **store-mode output byte-identical to `rfaPack.exe`** | ✅ **PASSES** — one comparison pins the stamp, first data offset (156), reserved field, version, table layout and entry order at once. Verified on the fixtures **and** on the real 618-entry vendor `menu.rfa` (finding 28) |
 | **an archive we wrote is really read by BF1942** | ✅ **PASSES** — our store pack installed as `Mods\bf1942\Archives\menu.rfa` brings `BF1942.exe +game bf1942` up to its **main menu**. The front end cannot start without that archive, so this is the engine itself accepting our container (finding 28) |
-| compress-mode output vs the oracle | ⚠️ **one-directional only** — see below, findings 27 and 31. The cause is now known and reproducible: miniLZO's `lzo1x_1` is not the era encoder |
+| compress-mode output vs the oracle | ✅ **PASSES — byte-identical**, since the default encoder became the era's LZO1X-999 (finding 31). `rfaPack -Compress` on the 618-entry menu tree: 7,963,020 B, SHA-256 `D6E928F8…`, the same file `bin\rfaPack.orig.exe` writes. `--lzo-fast` opts back into LZO1X-1, which is faster, larger and unreadable by the shipped tools (finding 27) |
 
 **Compress-mode output is not byte-identical, and cannot be.** RFA Pack 1.7 embeds a
 2003-era LZO whose `lzo1x_1_compress` picks different — equally valid — matches than the
@@ -411,6 +411,9 @@ not by the archive, because files are encoded and appended one at a time.
      carried-over entries" — not as an in-place patcher. `--reset-entry-flags` reproduces the
      original's clobbering; the default preserves the target's per-entry fields (D6).
    * **fix `-f`** — real name matching, so the broken original behaviour is strictly improved.
+   * **`--lzo-fast`** — compress with LZO1X-1 instead of the era's LZO1X-999: ~3x faster per
+     byte, ~21% larger, and unreadable by the shipped 2003 tools (finding 27). The default is
+     the era encoder, so compress output is byte-identical to `rfaPack.exe`'s.
    * **file replacement** — `-replace <internal/path>=<localFile>` (single or repeated).
    * `--threads N` / `-j N`, `--quiet`, `--list`, `--version`.
    * verify-after-write (`--verify`) comparing re-read payloads.
@@ -503,7 +506,7 @@ in this repo, since `bf_pablov_mod` does not have one.
 | D1 | Test suite location | **Integrate into this repo** — `testcommon/` + `src_test_rfa/`, wired via `check_PROGRAMS`/`TESTS` so `make check` runs it |
 | D2 | Skills to copy | **RFA-relevant subset only** — `rfa-unpack/`, `bf1942-standalone-map` refs+scripts, `bin\Readme.txt`; plus a new `AGENTS.md` |
 | D3 | Harness directory name | **`testcommon/`** — avoids ambiguity with the existing root `common.cc` / `common.h` |
-| D4 | Codec dependency | **Vendor miniLZO** into `third_party/minilzo/` (GPLv2+, compatible with this repo's GPLv3). **Not** under `cpputils/`, which is a submodule |
+| D4 | Codec dependency | **Vendor LZO** into `third_party/lzo/` (GPLv2+, compatible with this repo's GPLv3). **Not** under `cpputils/`, which is a submodule. **Amended 2026-09-24:** five sources from the full LZO 2.10 rather than miniLZO, because the archives need **LZO1X-999** and miniLZO carries only LZO1X-1 (finding 31). `third_party/minilzo/` was removed rather than kept alongside — the two define the same symbols and `minilzo.h` refuses to compile next to LZO |
 | D5 | Deployment | **Shadow in `bin\new\` first** — validate against the real `.ps1` skills before touching the originals |
 | D6 | `flags`/`reserved2` on `-u` | **Preserve the target's existing values by default** (§2.5 finding: the original silently zeroes them). `--reset-entry-flags` reproduces the original byte-for-byte. Chosen because clobbering is destructive, the fields have never been shown to matter, and an archive stays readable by the original either way — the compatibility requirement is that the oracle can still read it, not that the bytes match |
 | D7 | Carried-over entry names on `-u` | **Carry over verbatim; do not reproduce the renaming bug** (§2.5 mapping). The bug renames files with no way to ask for it, only ever triggers when the base name differs, and cannot be what anyone wants. Byte-identity with the original is therefore claimed for the matching-base case only, which is the case the documented workflow uses |
@@ -775,14 +778,7 @@ encoder emits **10 bytes** and miniLZO 2.10 emits **29**; over the whole `menu` 
 larger (10,064,159 vs 7,963,020 B). The `lzo1x_1` we vendor is not the encoder behind these
 archives.
 
-**Answered — see finding 31.** The encoder is LZO1X-999 at level 8, proven byte for byte
-against seven payloads from shipping archives. Which LZO variant produces those streams is no
-longer an open question, so the paragraph that used to sit here (there is no LZO library on
-this machine, testing it is a download-and-try task) is superseded by the answer plus the
-reproduction recipe in `tools/lzo_variant/README.md`. What remains is the decision whether to
-vendor it: with it, compress mode becomes byte-identical to the oracle's **and** readable by
-the old tools — findings 17 and 27 both close. Until then: store mode is the interoperable one,
-compress mode is for the engine and for us.
+**Answered and fixed — see finding 31.** The encoder is LZO1X-999 at level 8, proven byte for byte against seven payloads from shipping archives, and the writer now uses it by default. Compress mode therefore is byte-identical to the oracle's **and** readable by the old tools: findings 17 and 27 both close. `--lzo-fast` keeps LZO1X-1 available, and the warning below now belongs to that opt-in path only.
 
 ### Finding 28 — the original sorts entries by name, folded to UPPERCASE (2026-09-24)
 
@@ -1007,3 +1003,31 @@ family D4 already accepted for miniLZO, and D4's actual requirement — nothing 
 per-thread work memory is `LZO1X_999_MEM_COMPRESS` (~448 KB) instead of ~16 KB. Multi-threading
 should still leave us ahead of the single-threaded 2003 encoder, but the 21× margin measured for
 `lzo1x_1` will not survive.
+
+### The switch to LZO1X-999 — DONE (2026-09-24)
+
+`third_party/lzo/` replaced `third_party/minilzo/`: five sources plus their header closure
+(~516 KB), with the README recording why exactly those five. `LzoCodec` gained the variant
+parameter, `WriteOptions` gained `lzo`, and `rfaPack` gained `--lzo-fast`. The suite grew to 91
+testcases, including one that pins the era encoder's 10-byte stream for 200 bytes of `ab` - the
+cheapest possible guard against the variant silently changing.
+
+**Findings 17 and 27 both close**, measured on the shipping 618-entry menu tree:
+
+| | `lzo1x_1` before | LZO1X-999 level 8 now | `rfaPack.orig.exe` |
+|---|---|---|---|
+| archive size | 10,064,159 B | **7,963,020 B** | 7,963,020 B |
+| SHA-256 | `0987E0D2…` | **`D6E928F8…`** | `D6E928F8…` |
+| read by `rfaUnpack.orig.exe` | aborts after 11 files | **618/618 files, zero errors** | — |
+
+`--lzo-fast` keeps the old encoder reachable and warns on stderr that its output is not readable
+by the shipped tools. The default no longer needs that warning, and the `cli_pack_compress_*`
+testcase asserts the quiet stderr the golden has.
+
+**The `-O3` change was measured, not assumed.** `CFLAGS`/`CXXFLAGS` now default to `-g -O3`
+instead of autoconf's `-g -O2`, and the gain here is nil: the codec alone takes 1.06 s either way
+on the 22.9 MB menu tree, `rfaPack -Compress` 0.40 s either way, store and `--lzo-fast`
+unchanged. The compressed bytes are **identical** at both levels (`1ADC6636…`), which is the part
+that matters - the flag is safe, just not a speedup. The runtime belongs to the match search and
+to reading 618 files, not to codegen. Kept because it costs nothing and helps the other tools in
+this repo, which are not codec-bound.

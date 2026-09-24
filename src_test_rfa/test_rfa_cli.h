@@ -23,7 +23,8 @@ TestCasePtr test_cli_full_extract_of_the_fh_archive_matches_the_reader();
 // rfaPack
 TestCasePtr test_cli_pack_no_arguments_matches_the_golden();
 TestCasePtr test_cli_pack_plain_matches_the_golden();
-TestCasePtr test_cli_pack_compress_matches_the_golden_and_warns();
+TestCasePtr test_cli_pack_compress_matches_the_golden();
+TestCasePtr test_cli_pack_lzo_fast_warns_and_produces_a_larger_archive();
 TestCasePtr test_cli_pack_switch_matching_is_case_insensitive();
 TestCasePtr test_cli_pack_update_refuses_and_writes_nothing();
 TestCasePtr test_cli_pack_missing_source_directory_is_reported();

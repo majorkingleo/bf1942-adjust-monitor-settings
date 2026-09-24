@@ -83,6 +83,8 @@ TestCases make_test_cases()
 	test_cases.push_back( test_lzo_codec_roundtrip_via_wrapper() );
 	test_cases.push_back( test_lzo_codec_detects_size_mismatch() );
 	test_cases.push_back( test_lzo_codec_max_compressed_size_is_sufficient() );
+	test_cases.push_back( test_lzo_codec_era_variant_reproduces_the_archive_encoder() );
+	test_cases.push_back( test_lzo_codec_fast_variant_is_the_other_compressor() );
 
 	// --- container model --------------------------------------------------
 	test_cases.push_back( test_format_constants_match_the_documented_layout() );
@@ -140,7 +142,8 @@ TestCases make_test_cases()
 	// --- CLI: rfaPack -----------------------------------------------------
 	test_cases.push_back( test_cli_pack_no_arguments_matches_the_golden() );
 	test_cases.push_back( test_cli_pack_plain_matches_the_golden() );
-	test_cases.push_back( test_cli_pack_compress_matches_the_golden_and_warns() );
+	test_cases.push_back( test_cli_pack_compress_matches_the_golden() );
+	test_cases.push_back( test_cli_pack_lzo_fast_warns_and_produces_a_larger_archive() );
 	test_cases.push_back( test_cli_pack_switch_matching_is_case_insensitive() );
 	test_cases.push_back( test_cli_pack_update_refuses_and_writes_nothing() );
 	test_cases.push_back( test_cli_pack_missing_source_directory_is_reported() );

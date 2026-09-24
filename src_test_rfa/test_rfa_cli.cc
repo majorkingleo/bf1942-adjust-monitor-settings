@@ -691,14 +691,13 @@ TestCasePtr test_cli_pack_plain_matches_the_golden()
 		std::ios::out );
 }
 
-TestCasePtr test_cli_pack_compress_matches_the_golden_and_warns()
+TestCasePtr test_cli_pack_compress_matches_the_golden()
 {
-	// The golden's `pack_compress`. Same lines as `pack_plain` with ` UseCompression: 1` -
-	// and the one place where we depart from the original on purpose: it says nothing about
-	// the archive it just wrote being unreadable by the tool family it belongs to
-	// (finding 27), we say so on stderr.
+	// The golden's `pack_compress`: same lines as `pack_plain` with ` UseCompression: 1`, and -
+	// since the default encoder is the era's own LZO1X-999 (finding 31) - an empty stderr, just
+	// like the original. The warning finding 27 demanded now belongs to --lzo-fast only.
 	return std::make_shared<TestCaseFuncOneFile>(
-		"cli_pack_compress_matches_the_golden_and_warns",
+		"cli_pack_compress_matches_the_golden",
 		[]( const std::string & scratch_file ) {
 			Scratch work( scratch_file + ".compress" );
 
@@ -714,6 +713,10 @@ TestCasePtr test_cli_pack_compress_matches_the_golden_and_warns()
 			const std::string out =
 				run_pack( { "rfaPack.exe", src, "menu", archive, "-Compress" }, rc, err );
 
+			if( !err.empty() ) {
+				std::cout << "[rfa] the default encoder must not warn: " << err << "\n";
+			}
+
 			return rc == 0
 			    && contains( out, "TotalFiles: 1" )
 			    && contains( out, "  Uncompressed .rfa size (mb): 0" )
@@ -721,8 +724,85 @@ TestCasePtr test_cli_pack_compress_matches_the_golden_and_warns()
 			    && contains( out, " UseCompression: 1" )
 			    && contains( out, " Update & Append: 0" )
 			    && std::filesystem::is_regular_file( archive )
-			    // the golden has an empty stderr here; the warning is the divergence
-			    && contains( err, "WARNING! -Compress output is not readable by RFA Pack 1.7" );
+			    && err.empty();
+		},
+		std::ios::out );
+}
+
+TestCasePtr test_cli_pack_lzo_fast_warns_and_produces_a_larger_archive()
+{
+	// --lzo-fast is our own switch: LZO1X-1 instead of the era's 999. It must (a) still write
+	// a valid archive, (b) be visibly larger on data that 999 compresses well, and (c) warn,
+	// because its streams are not readable by the shipped 2003 tools (finding 27).
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_pack_lzo_fast_warns_and_produces_a_larger_archive",
+		[]( const std::string & scratch_file ) {
+			Scratch work( scratch_file + ".fast" );
+
+			const std::string src = work.subdir( "src" );
+
+			std::string payload;
+			for( int i = 0; i < 2000; ++i ) {
+				payload += "Game.setNumberOfTickets 1 115; this line repeats a lot\r\n";
+			}
+
+			if( !write_file( src + "/one.txt", payload ) ) {
+				return false;
+			}
+
+			int rc = 0;
+			std::string era_err;
+			std::string fast_err;
+
+			const std::string era_archive  = work.path( "era.rfa" );
+			const std::string fast_archive = work.path( "fast.rfa" );
+
+			const std::string era_out =
+				run_pack( { "rfaPack.exe", src, "menu", era_archive, "-Compress" }, rc, era_err );
+
+			if( rc != 0 ) {
+				return false;
+			}
+
+			const std::string fast_out = run_pack(
+				{ "rfaPack.exe", src, "menu", fast_archive, "-Compress", "--lzo-fast" }, rc, fast_err );
+
+			if( rc != 0 || !contains( fast_out, " UseCompression: 1" ) ) {
+				std::cout << "[rfa] --lzo-fast did not pack: " << fast_out << "\n";
+				return false;
+			}
+
+			if( !contains( fast_err, "WARNING! --lzo-fast output is not readable by RFA Pack 1.7" ) ) {
+				std::cout << "[rfa] --lzo-fast did not warn\n";
+				return false;
+			}
+
+			// The switch must also keep the original's chatter identical.
+			if( !contains( era_out, " UseCompression: 1" ) ) {
+				return false;
+			}
+
+			// Both encoders must actually have been used. Which one is SMALLER depends on
+			// the data: on the menu tree the era encoder wins by 21%, while on the highly
+			// repetitive input this testcase uses LZO1X-1 comes out ahead. So the assertion
+			// is that the two archives differ, which is what "a different compressor ran"
+			// means, and the sizes are reported rather than asserted.
+			const std::vector<unsigned char> era_bytes  = read_whole_file( era_archive );
+			const std::vector<unsigned char> fast_bytes = read_whole_file( fast_archive );
+
+			if( era_bytes.empty() || fast_bytes.empty() ) {
+				return false;
+			}
+
+			if( era_bytes == fast_bytes ) {
+				std::cout << "[rfa] --lzo-fast produced the same archive as the default\n";
+				return false;
+			}
+
+			std::cout << "        era encoder " << era_bytes.size()
+			          << " B, --lzo-fast " << fast_bytes.size() << " B\n";
+
+			return true;
 		},
 		std::ios::out );
 }
