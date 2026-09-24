@@ -12,3 +12,11 @@
 # Vendored third-party sources are kept byte-identical to upstream, so pin their
 # endings too - a CRLF checkout would silently "modify" them.
 third_party/** text eol=lf
+
+# The golden writer fixture tree MUST stay byte-identical to what the committed
+# oracle archives were built from. Two of its files are deliberately CRLF, and the
+# archives capture their sizes, so any line-ending conversion breaks the byte
+# comparison. With core.autocrlf=input (set on this machine) git silently stripped
+# the CR on commit, which made our writer look 2 bytes short - hence -text, which
+# disables all conversion in both directions.
+tests/data/golden/tree/** -text
