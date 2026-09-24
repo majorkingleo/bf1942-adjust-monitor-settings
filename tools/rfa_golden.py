@@ -12,7 +12,9 @@ stable across machines and across runs:
 
     {ARCHIVE}  basename of the archive      {OUTDIR}   the extract target
     {LISTFILE} the generated list file      {SRCDIR}   the pack source directory
-    {TMP}      the scratch root
+    {TMP}      the scratch root             {MS}       elapsed milliseconds
+    {ADDR}     the oracle's heap addresses (process-layout dependent)
+    {REPO_ROOT} the checkout root, for paths that have no token of their own
 
 Usage:
     python tools/rfa_golden.py            # (re)write tests/golden/oracle-cli.json
@@ -43,6 +45,21 @@ TINY_ARCHIVE = REPO_ROOT / "tests" / "data" / "tiny" / "salerno_001.rfa"
 
 def _tokens(result: dict, tmp: Path, substitutions: dict[str, str]) -> dict:
     """Replace volatile values with stable tokens so the golden file is portable."""
+
+    def normalise(value: str) -> str:
+        """Token out the scratch root, the named paths, then the checkout root.
+
+        The order matters: the substitutions hold absolute paths *under* the repo root,
+        so they must be recognised before the root itself is replaced. Anything left
+        after that pass - a fixture path that has no token of its own - is reduced to a
+        `{REPO_ROOT}`-prefixed path, which is what stops a committed golden from naming
+        one machine's drive letter.
+        """
+        text = str(value).replace(str(tmp), "{TMP}")
+        for token, replacement in substitutions.items():
+            text = text.replace(str(replacement), token)
+        return text.replace(str(REPO_ROOT), "{REPO_ROOT}")
+
     out = dict(result)
     for key in ("stdout", "stderr"):
         text = result.get(key, "")
@@ -51,15 +68,27 @@ def _tokens(result: dict, tmp: Path, substitutions: dict[str, str]) -> dict:
             text = text.replace(str(value), token)
         # rfaPack reports elapsed milliseconds, which naturally varies per run.
         text = re.sub(r"TimeTaken: \d+", "TimeTaken: {MS}", text)
+        # rfaUnpack dumps two heap addresses of the loaded file table. They are process
+        # layout, not behaviour: the pair shifts by 0x10000 depending on the size of the
+        # environment block, so it differs between a Cygwin and a PowerShell invocation.
+        # Left in, the golden could never be reproduced by --check anywhere but the shell
+        # it was captured from.
+        text = re.sub(
+            r"rfa_file_name: 0x[0-9A-Fa-f]+ <- 0x[0-9A-Fa-f]+",
+            "rfa_file_name: {ADDR} <- {ADDR}",
+            text,
+        )
         text = text.replace("\r\n", "\n").rstrip("\n")
         out[key] = text
     for key in ("archive", "outdir", "listfile", "srcdir", "binary"):
         if key in out:
-            value = str(out[key])
-            value = value.replace(str(tmp), "{TMP}")
-            for token, replacement in substitutions.items():
-                value = value.replace(str(replacement), token)
-            out[key] = value
+            out[key] = normalise(out[key])
+
+    # argv is committed too, so it needs the same treatment - otherwise the file pins
+    # itself to whichever drive and temp directory the capture happened on.
+    if "argv" in out:
+        out["argv"] = [normalise(item) for item in out["argv"]]
+
     out.pop("tree", None)
     return out
 
@@ -173,6 +202,10 @@ def capture() -> dict:
             "reorders them relative to what a console user sees. Compare message "
             "presence, not emission order.",
             "`TimeTaken: {MS}` is genuinely variable and has been normalised.",
+            "The `rfa_file_name: {ADDR} <- {ADDR}` line is two heap addresses printed by "
+            "the original. It is process layout, not behaviour - it shifts with the size "
+            "of the environment block, so it changed between shells - and is normalised "
+            "to `{ADDR}` for that reason.",
             "Exit codes are not a reliable success signal in the original: "
             "`-i9999` (index out of range) and the broken `-f` path both print an "
             "error yet exit 0.",
@@ -233,7 +266,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if bad else 0
 
     GOLDEN.parent.mkdir(parents=True, exist_ok=True)
-    GOLDEN.write_text(json.dumps(current, indent=2), encoding="utf-8")
+    # newline="\n" explicitly: the default translates to os.linesep, so on Windows the
+    # committed file would gain CRLF and then be normalised back to LF on the next
+    # commit - churn in a file whose whole job is to be diffable.
+    GOLDEN.write_text(json.dumps(current, indent=2), encoding="utf-8", newline="\n")
     print(f"wrote {GOLDEN.relative_to(REPO_ROOT)} ({len(current['scenarios'])} scenarios)")
     return 0
 

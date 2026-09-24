@@ -1,3 +1,125 @@
+commit 7be59609e5a9de62c2b11c89b896dd237c666ce5
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Wed Sep 23 14:47:49 2026 +0200
+
+    Probe the original rfaPack -u semantics
+    
+    -u was the last unknown in the plan. Nothing in the vendor readme or in the CLI
+    chatter explains it, so it was established black-box with controlled archives and
+    trees: tools/rfa_probe_update.py, every result re-extracted by the original to prove
+    the archive stays readable.
+    
+    The headline finding removes most of the work: -u is byte-for-byte a FRESH PACK of
+    the source tree using the TARGET ARCHIVE's compression policy, plus entries carried
+    over for names absent from the tree. Verified by byte comparison in every case, not
+    inferred from reading the output. So -u needs no in-place update algorithm at all; it
+    reuses the fresh-pack path already proven byte-identical to the oracle.
+    
+    Also established:
+    
+    * -Compress is IGNORED on -u, in both directions. -u -Compress leaves a store archive
+      raw (version stays 0), and plain -u adds COMPRESSED entries to a compress archive
+      (version stays 1). The flag is parsed and echoed as UseCompression: N and never
+      reaches the archive.
+    * -u never deletes. An entry missing from the tree is retained and still extracted.
+    * -u with no existing archive just creates it. rc is 0 in every case.
+    
+    Two destructive behaviours, both found only because the probe compared against a
+    fresh pack and varied the base name:
+    
+    * -u RENAMES carried-over entries as newBase + "/" + storedName.substr(len(newBase)+1).
+      On the FH archive, which stores bf1942/levels/..., base bf1942 leaves the names
+      untouched, base menu yields menu/2/levels/... (the stray 2 is the tail of the eaten
+      bf194), and base bf1942x yields bf1942x/evels/... . The rule was stated as a
+      prediction and then confirmed at three base lengths. We deliberately do NOT
+      reproduce this (D7): it renames files unasked, and it is invisible in the documented
+      workflow because that workflow always passes the matching base name.
+    * -u REPLACES a foreign reserved region. The FH archive's is 4078 bytes at offset
+      8..4086; a single -u normalised it to the standard 148 bytes at offset 156,
+      discarding about 3.9 KB. This retires the "an in-place -u must preserve the
+      target's bytes here" claim in rfa/RfaStamp.h, which was wrong - and could not have
+      been detected with self-produced archives, where the region already is the constant
+      (D8).
+    * Opaque per-entry fields are NOT preserved: setting flags to 0xFFFFFFFF and reserved2
+      to 0xDEADBEEF and then running -u reset every entry to 0. On the FH archive one -u
+      collapsed all its 0xFFFFFFFF and 0x7C001CD8 values to 0. That contradicts the advice
+      to "treat flags as opaque and preserve it on -u" which was in AGENTS.md, the skills
+      and the code comments; all are corrected (D6).
+    
+    Documentation corrected beyond the -u material: the entry-order rule in the plan's own
+    findings section and in the format skill still claimed "ascending by name (ASCII)",
+    which Phase 2 had already disproved. Also fixes the same less-than-versus-inequality
+    chunk rule in tools/rfa_probe.py, which had escaped the earlier sweep.
+    
+    Entry table layout recorded while tracing this: u32 entryCount, then per entry
+    u32 nameLen + name + 24 bytes, then a trailing zero u32; reserved1 is 1253856
+    (0x001321E0).
+    
+    rfa/RfaStamp.h is generated, so the corrected note lives in its generator's template
+    as well, and the file was regenerated to prove it round-trips.
+    
+    make check -> PASS, 59/59.
+
+commit 8928787c275f5aac1397381dd414065194d51e06
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Wed Sep 23 13:58:59 2026 +0200
+
+    fix the stale less-than chunk test in the CLI reference
+    
+    The rfa-format doc had the same incorrect rule corrected in the Phase 2 commit; an
+    entry's chunk is an LZO1X stream iff compressedSize != uncompressedSize, because
+    LZO1X expands small or incompressible chunks.
+
+commit f235cc4efd096c2f4cc2ea45d29be1bf50700fb7
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Wed Sep 23 13:58:40 2026 +0200
+
+    Phase 2 (part 2): RfaWriter, oracle byte-comparison and golden archives
+    
+    Completes the packer and the compatibility evidence for Phase 2 in
+    PLAN_rfa_tools.md.  make check -> PASS, 59/59 testcases, no diagnostics.
+    
+    * rfa/RfaWriter.h/.cc - packs a directory tree in either policy, reproducing
+      rfaPack.exe's layout: version 0 + raw entries without -Compress, version 1 +
+      32 KiB chunked entries with it, data at offset 156 behind the stamp, entries
+      in the oracle's walk order.  A failed pack removes its partial output rather
+      than leaving a half-written archive that looks valid.
+    * rfa/RfaStamp.h - the 148-byte region rfaPack.exe writes before the first data
+      block, generated by tools/rfa_stamp_gen.py.  Its meaning is unknown and no
+      reader needs it, but reproducing it makes our archives structurally
+      indistinguishable from the tool's.
+    * Parallelism: chunk compression runs across a pool sized by
+      hardware_concurrency(), one work item per 32 KiB chunk.  Results are indexed
+      by chunk rather than appended in completion order, so output cannot depend on
+      scheduling; verified byte-identical at 1 and 8 threads.
+    * tools/rfa_golden_archives.py + tests/data/golden/ - a small source tree and the
+      archives the ORIGINAL rfaPack.exe wrote from it, committed as the writer's
+      oracle.  Launching the oracle from a test was not viable: std::system goes
+      through cmd.exe, which reads forward slashes as switches and resolves relative
+      paths against its own working directory.  Committing them also makes the suite
+      hermetic and fast.
+    
+    Two corrections the tests forced, both of a kind that silently corrupt data:
+    
+    * Chunk::is_compressed() must test compressedSize != uncompressedSize, NOT
+      less-than.  LZO1X expands incompressible input (1 byte becomes 5), so "<"
+      classified exactly those chunks as verbatim and returned compressed bytes as
+      file content.  Size-only self-consistency cannot see this; only the oracle
+      comparison catches it.
+    * rfaPack.exe does not sort entries by full path.  Each directory contributes its
+      own files (sorted) and then its subdirectories (sorted), recursively.  A
+      full-path sort agrees on flat trees and diverges on nested ones; the
+      sort_entries option was removed rather than left as a trap.
+    
+    Store-mode output is byte-identical to rfaPack.exe, which pins the stamp, first
+    data offset, reserved field, version, table layout and entry order in a single
+    comparison.  Compress-mode output is deliberately compared semantically instead:
+    RFA Pack 1.7 embeds a 2003-era LZO that picks different but equally valid matches
+    than miniLZO 2.10, and whose empty-file stream is 4 bytes where miniLZO's is 3.
+    
+    -u in-place update remains unimplemented; its semantics are still unknown and
+    must be probed before being written.
+
 commit ada2de5b62bb178a195a3b06f0eef142891a01e2
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Wed Sep 23 13:40:54 2026 +0200

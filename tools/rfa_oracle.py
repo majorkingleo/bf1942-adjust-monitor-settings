@@ -46,6 +46,19 @@ BIN_DIR = REPO_ROOT / "bin"
 UNPACK_ORACLE = BIN_DIR / "rfaUnpack.orig.exe"
 PACK_ORACLE = BIN_DIR / "rfaPack.orig.exe"
 
+# The oracle binaries are native Windows executables and every path is passed through
+# verbatim. A Cygwin/MSYS Python hands them POSIX paths ("/cygdrive/c/...", "/tmp/..."),
+# which they read as nonexistent. That failure is both silent and destructive: rfaPack
+# prints "TotalFiles: 0" and still exits 0, so a stray regenerate would happily commit
+# empty golden files. Refuse to run instead of producing them.
+if sys.platform != "win32":
+    raise SystemExit(
+        f"error: Python reports platform '{sys.platform}', but these tools drive native\n"
+        f"       Windows binaries. Run them with the Windows interpreter (from PowerShell),\n"
+        f"       not with Cygwin's python:\n"
+        f"           python tools/{Path(sys.argv[0]).name} ..."
+    )
+
 
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()

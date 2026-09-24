@@ -8,116 +8,117 @@
   "caveats": [
     "Line ORDER within stdout is not stable under redirection: the banner is written through a different stream than the progress chatter, so piping reorders them relative to what a console user sees. Compare message presence, not emission order.",
     "`TimeTaken: {MS}` is genuinely variable and has been normalised.",
+    "The `rfa_file_name: {ADDR} <- {ADDR}` line is two heap addresses printed by the original. It is process layout, not behaviour - it shifts with the size of the environment block, so it changed between shells - and is normalised to `{ADDR}` for that reason.",
     "Exit codes are not a reliable success signal in the original: `-i9999` (index out of range) and the broken `-f` path both print an error yet exit 0.",
     "`-f` cannot match any file in this build, so `unpack_f_broken` records the broken behaviour deliberately; fixing it is an intentional divergence."
   ],
   "scenarios": {
     "unpack_no_args": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaUnpack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaUnpack.orig.exe",
       "argv": [],
       "rc": 1,
       "stdout": "|| .RFA UNPACK ||\n Usage: rfaUnpack.exe <Archive.rfa> [ExtractToPath] [-option]\n Options: \n   -i[indexToExtract]       -i123   -f[filenameToExtract]    -fObjects/Vehicles/Land/Willy/Objects.con   -l[listFile.lst]         -lC:\\extractFileList.lst",
       "stderr": ""
     },
     "pack_no_args": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaPack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaPack.orig.exe",
       "argv": [],
       "rc": 1,
       "stdout": "ERROR! Not enough command line arguments\n Usage examples: \n   ProgramName [sourceDir] [PackDirName] [Archive.rfa] [ -u update existing .rfa | -Compress]\n   RfaPack.exe d:/menu menu menu.rfa\n   RfaPack.exe d:/menu menu menu.rfa -u\n   RfaPack.exe d:/menu menu menu.rfa -Compress\n   RfaPack.exe d:/menu menu menu.rfa -u -Compress\n\n-- RFA Pack 1.7 --",
       "stderr": ""
     },
     "unpack_missing_outdir": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaUnpack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaUnpack.orig.exe",
       "argv": [
-        "E:\\progs\\bf1942-adjust-monitor-settings\\tests\\data\\tiny\\salerno_001.rfa",
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\does_not_exist"
+        "{ARCHIVE}",
+        "{TMP}\\does_not_exist"
       ],
       "rc": 1,
       "stdout": "|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\does_not_exist\nError! Directory does not exist: {TMP}\\does_not_exist",
       "stderr": ""
     },
     "unpack_index_0": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaUnpack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaUnpack.orig.exe",
       "argv": [
-        "E:\\progs\\bf1942-adjust-monitor-settings\\tests\\data\\fh\\Battle_Of_Pavlov-1942.rfa",
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\existing",
+        "{ARCHIVE}",
+        "{TMP}\\existing",
         "-i0"
       ],
       "rc": 0,
-      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: 0x001AF4C4 <- 0x001AFB28\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\existing\n $Extract file index: \"0\" = 0",
+      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: {ADDR} <- {ADDR}\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\existing\n $Extract file index: \"0\" = 0",
       "stderr": ""
     },
     "unpack_index_out_of_range": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaUnpack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaUnpack.orig.exe",
       "argv": [
-        "E:\\progs\\bf1942-adjust-monitor-settings\\tests\\data\\fh\\Battle_Of_Pavlov-1942.rfa",
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\existing",
+        "{ARCHIVE}",
+        "{TMP}\\existing",
         "-i9999"
       ],
       "rc": 0,
-      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: 0x001AF4C4 <- 0x001AFB28\nERROR! item out of range to extract! 9999\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\existing\n $Extract file index: \"9999\" = 9999",
+      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: {ADDR} <- {ADDR}\nERROR! item out of range to extract! 9999\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\existing\n $Extract file index: \"9999\" = 9999",
       "stderr": ""
     },
     "unpack_list_full_paths": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaUnpack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaUnpack.orig.exe",
       "argv": [
-        "E:\\progs\\bf1942-adjust-monitor-settings\\tests\\data\\fh\\Battle_Of_Pavlov-1942.rfa",
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\by_list",
-        "-lC:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\list_ok.lst"
+        "{ARCHIVE}",
+        "{TMP}\\by_list",
+        "-l{TMP}\\list_ok.lst"
       ],
       "rc": 0,
-      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: 0x001AF4C4 <- 0x001AFB28\nEXTRACTING BY NAME: bf1942/levels/Battle_Of_Pavlov-1942/Conquest.con\nEXTRACTING BY NAME: bf1942/levels/Battle_Of_Pavlov-1942/Conquest/ControlPointTemplates.con\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\by_list\n $Extract files FileList: {TMP}\\list_ok.lst",
+      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: {ADDR} <- {ADDR}\nEXTRACTING BY NAME: bf1942/levels/Battle_Of_Pavlov-1942/Conquest.con\nEXTRACTING BY NAME: bf1942/levels/Battle_Of_Pavlov-1942/Conquest/ControlPointTemplates.con\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\by_list\n $Extract files FileList: {TMP}\\list_ok.lst",
       "stderr": ""
     },
     "unpack_list_basename": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaUnpack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaUnpack.orig.exe",
       "argv": [
-        "E:\\progs\\bf1942-adjust-monitor-settings\\tests\\data\\fh\\Battle_Of_Pavlov-1942.rfa",
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\by_base",
-        "-lC:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\list_base.lst"
+        "{ARCHIVE}",
+        "{TMP}\\by_base",
+        "-l{TMP}\\list_base.lst"
       ],
       "rc": 0,
-      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: 0x001AF4C4 <- 0x001AFB28\nEXTRACTING BY NAME: Conquest.con\n  ERROR! Could not ExtractByName: Conquest.con\n\tName Not found!\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\by_base\n $Extract files FileList: {TMP}\\list_base.lst",
+      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: {ADDR} <- {ADDR}\nEXTRACTING BY NAME: Conquest.con\n  ERROR! Could not ExtractByName: Conquest.con\n\tName Not found!\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\by_base\n $Extract files FileList: {TMP}\\list_base.lst",
       "stderr": ""
     },
     "unpack_f_broken": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaUnpack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaUnpack.orig.exe",
       "argv": [
-        "E:\\progs\\bf1942-adjust-monitor-settings\\tests\\data\\fh\\Battle_Of_Pavlov-1942.rfa",
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\existing",
+        "{ARCHIVE}",
+        "{TMP}\\existing",
         "-fInit.con"
       ],
       "rc": 0,
-      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: 0x001AF4C4 <- 0x001AFB28\nEXTRACTING BY NAME: Init.con\n  ERROR! Could not ExtractByName: Init.con\n\tName Not found!\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\existing\n $Extract file name: Init.con",
+      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: {ADDR} <- {ADDR}\nEXTRACTING BY NAME: Init.con\n  ERROR! Could not ExtractByName: Init.con\n\tName Not found!\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\existing\n $Extract file name: Init.con",
       "stderr": ""
     },
     "unpack_full_tiny": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaUnpack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaUnpack.orig.exe",
       "argv": [
-        "E:\\progs\\bf1942-adjust-monitor-settings\\tests\\data\\tiny\\salerno_001.rfa",
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\full"
+        "{ARCHIVE}",
+        "{TMP}\\full"
       ],
       "rc": 0,
-      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: 0x001AF4C4 <- 0x001AFB28\nunpackedSize_MB: 0\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\full",
+      "stdout": "LoadIndex( \"{ARCHIVE}\" )\nrfa_file_name: {ADDR} <- {ADDR}\nunpackedSize_MB: 0\n|| .RFA UNPACK ||\nstrExtractPath: {TMP}\\full",
       "stderr": ""
     },
     "pack_plain": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaPack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaPack.orig.exe",
       "argv": [
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\src",
+        "{TMP}\\src",
         "menu",
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\plain.rfa"
+        "{TMP}\\plain.rfa"
       ],
       "rc": 0,
       "stdout": "TotalFiles: 1\n  Uncompressed .rfa size (mb): 0\ntmpDestDirLoc: {TMP}\n TimeTaken: {MS}\n-- RFA Pack 1.7 --\n UseCompression: 0\n Update & Append: 0",
       "stderr": ""
     },
     "pack_compress": {
-      "binary": "E:\\progs\\bf1942-adjust-monitor-settings\\bin\\rfaPack.orig.exe",
+      "binary": "{REPO_ROOT}\\bin\\rfaPack.orig.exe",
       "argv": [
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\src",
+        "{TMP}\\src",
         "menu",
-        "C:\\Users\\Martin\\AppData\\Local\\Temp\\rfa_golden_9i2dq4nu\\comp.rfa",
+        "{TMP}\\comp.rfa",
         "-Compress"
       ],
       "rc": 0,
