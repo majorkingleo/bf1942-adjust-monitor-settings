@@ -362,8 +362,12 @@ runner's own failure paths were verified by hand (`-t 99` → exit 1, `--bogus` 
    data at offset 156 behind the generated stamp, entries in the oracle's walk order. A
    failed pack removes its partial output rather than leaving a half archive.
    ⏳ **`-u` in-place update is NOT implemented** — it needs the probe work in §7.
-5. ✅ Parallelism — chunk compression across a pool sized by
-   `std::thread::hardware_concurrency()` (overridable), one 32 KiB chunk per work item.
+5. ✅ Parallelism — a flat queue with one 32 KiB chunk per work item, across a pool sized by
+   `rfa::usable_cpu_count()` (overridable through `WriteOptions::threads`). That is not bare
+   `std::thread::hardware_concurrency()`: it narrows to what this PROCESS may use, so a CPU
+   affinity mask or a cgroup quota is respected, and both platform paths are written already
+   for a future Linux port (`rfa/CpuCount.cc`). The pool is the CPU count rather than a
+   constant, so the same binary is right on a dual-core laptop and on a 128-core server.
    Results are indexed by chunk and never appended in completion order, so the output
    cannot depend on scheduling. Verified byte-identical at 1 and 8 threads.
 

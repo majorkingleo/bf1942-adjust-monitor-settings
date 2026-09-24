@@ -47,13 +47,14 @@ struct WriteOptions
 	/// the game can read it (finding 27) - opt in through `--lzo-fast`.
 	LzoVariant lzo = LzoVariant::Era;
 
-	/// Worker threads used to compress chunks. 0 means std::thread::hardware_concurrency().
+	/// Worker threads used to compress chunks. 0 means the number of CPUs this process may
+	/// use - see rfa/CpuCount.h, which is not simply std::thread::hardware_concurrency().
 	///
-	/// Clamped to the archive's total chunk count and to 64. Note the clamp is by CHUNKS, not
-	/// by files: the unit of work is the 32 KiB chunk, and a tree holding one 22.9 MB file is
-	/// 1 file but 700 chunks. Clamping by files reduced that tree to a single thread and
-	/// packed it at 0.99 of 24 cores (finding 33). Ignored for Store, which has no
-	/// compression queue.
+	/// Clamped to the archive's total chunk count and to that same CPU count. Note the first
+	/// clamp is by CHUNKS, not by files: the unit of work is the 32 KiB chunk, and a tree
+	/// holding one 22.9 MB file is 1 file but 700 chunks. Clamping by files reduced that tree
+	/// to a single thread and packed it at 0.99 of 24 cores (finding 33). Ignored for Store,
+	/// which has no compression queue.
 	unsigned threads = 0;
 };
 
@@ -107,9 +108,9 @@ public:
 	                           std::string * error = nullptr );
 
 	/**
-	 * Worker threads write() will use: `options.threads`, or the hardware concurrency when
-	 * that is 0, clamped to the archive's total chunk count and to 64. Returns 1 for
-	 * CompressionPolicy::Store.
+	 * Worker threads write() will use: `options.threads`, or the number of CPUs this process
+	 * may use when that is 0, clamped to the archive's total chunk count and to the CPU count.
+	 * Returns 1 for CompressionPolicy::Store.
 	 *
 	 * Exposed because this is a PERFORMANCE property, not an output property: a wrong clamp
 	 * still writes correct archives, so no byte comparison can catch it. The tests pin the

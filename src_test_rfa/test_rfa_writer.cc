@@ -6,6 +6,7 @@
 
 #include "test_rfa_writer.h"
 
+#include "rfa/CpuCount.h"
 #include "rfa/RfaArchive.h"
 #include "rfa/RfaStamp.h"
 #include "rfa/RfaWriter.h"
@@ -788,27 +789,25 @@ TestCasePtr test_writer_thread_budget_follows_chunk_count_not_file_count()
 	return std::make_shared<TestCaseFuncOneFile>(
 		"writer_thread_budget_follows_chunk_count_not_file_count",
 		[]( const std::string & ) {
-			unsigned hardware = std::thread::hardware_concurrency();
-			if( hardware == 0 ) {
-				hardware = 1;
-			}
+			const unsigned cpus = usable_cpu_count();
 
 			std::vector<SourceFile> big( 1 );
 			big[0].name = "menu/big.bin";
 			big[0].path = "irrelevant";
-			big[0].size = 22900000;              // 700 chunks
+			big[0].size = 22900000;              // 699 chunks
 
 			WriteOptions options;
 			options.policy = CompressionPolicy::Compress;
 
 			// THE regression: one file must not mean one thread. The clamp used to be against
-			// the file count, so this tree got min(hardware, 1) = 1 and ran serially.
+			// the file count, so this tree got min(cpus, 1) = 1 and ran serially.
+			const unsigned chunks = chunk_count_for( big[0].size );
 			const unsigned wide = RfaWriter::planned_threads( big, options );
-			const unsigned capped = std::min( hardware, 64u );
+			const unsigned expected = std::min( cpus, chunks );
 
-			if( wide != capped ) {
-				std::cout << "[rfa] a 700-chunk single-file tree planned " << wide << " threads, expected "
-				          << capped << "; the clamp is still counting files\n";
+			if( wide != expected ) {
+				std::cout << "[rfa] a " << chunks << "-chunk single-file tree planned " << wide
+				          << " threads, expected " << expected << "; the clamp is still counting files\n";
 				return false;
 			}
 
@@ -844,6 +843,36 @@ TestCasePtr test_writer_thread_budget_follows_chunk_count_not_file_count()
 
 			if( RfaWriter::planned_threads( big, limited ) != 3u ) {
 				std::cout << "[rfa] --threads 3 was not honoured\n";
+				return false;
+			}
+
+			// The ceiling is the CPU count, not a constant. A hard 64 made this request come back
+			// as 64 on a 24-CPU machine: more workers than the machine has, and the same answer
+			// a 128-core machine would have got.
+			WriteOptions greedy;
+			greedy.policy = CompressionPolicy::Compress;
+			greedy.threads = 1000000;
+
+			const unsigned absurd = RfaWriter::planned_threads( big, greedy );
+
+			if( absurd != wide ) {
+				std::cout << "[rfa] --threads 1000000 planned " << absurd << " but the default planned "
+				          << wide << "; the ceiling is not the CPU count (" << cpus << ")\n";
+				return false;
+			}
+
+			// usable_cpu_count() narrows the machine's count to what this process may use, so it
+			// is never zero and never larger than the machine. Both would be silent: a 0 makes
+			// the min() above collapse to 1, which looks like a working build that is simply
+			// slow.
+			unsigned machine = std::thread::hardware_concurrency();
+			if( machine == 0 ) {
+				machine = 1;
+			}
+
+			if( cpus < 1u || cpus > machine ) {
+				std::cout << "[rfa] usable_cpu_count() returned " << cpus << ", which is outside 1.."
+				          << machine << "\n";
 				return false;
 			}
 

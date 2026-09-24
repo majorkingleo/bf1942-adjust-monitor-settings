@@ -6,6 +6,7 @@
 
 #include "RfaWriter.h"
 
+#include "CpuCount.h"
 #include "LzoCodec.h"
 #include "RfaStamp.h"
 
@@ -29,9 +30,6 @@ void append_u32( std::vector<unsigned char> & out, std::uint32_t value )
 	out.push_back( (unsigned char)( ( value >> 24 ) & 0xFF ) );
 }
 
-/// Hard ceiling on worker threads, so a pathological --threads cannot exhaust the process.
-constexpr unsigned MAX_WORKERS = 64u;
-
 /// A batch of files is grown until it holds this much source data, and is never split inside
 /// a file. It bounds the memory a batch holds; it is large enough that an entire ordinary
 /// tree (the shipping menu is 22.9 MB) is one batch, so the parallelism does not depend on
@@ -39,8 +37,13 @@ constexpr unsigned MAX_WORKERS = 64u;
 constexpr std::uint64_t BATCH_TARGET_BYTES = 64ull * 1024 * 1024;
 
 /**
- * Worker threads to use: `requested`, or the hardware concurrency when that is 0, clamped to
- * the work available and to MAX_WORKERS.
+ * Worker threads to use: `requested`, or the number of CPUs when that is 0, clamped to the
+ * work available and to the CPU count.
+ *
+ * The ceiling is the CPU count, not a constant. A hard 64 was wrong in both directions: it
+ * could not be reached on a small machine, so `--threads 200` had to be quietly cut twice,
+ * and it under-served a large one. `usable_cpu_count()` also narrows to what this PROCESS may
+ * use, so a CPU affinity mask or a cgroup quota is respected rather than ignored.
  *
  * `work_items` must be a count of CHUNKS, not of files. The unit of work is the 32 KiB
  * chunk, and the two differ by orders of magnitude - a tree holding one 22.9 MB file is 1
@@ -50,14 +53,11 @@ constexpr std::uint64_t BATCH_TARGET_BYTES = 64ull * 1024 * 1024;
  */
 unsigned effective_threads( unsigned requested, std::uint64_t work_items )
 {
-	unsigned hardware = std::thread::hardware_concurrency();
-	if( hardware == 0 ) {
-		hardware = 1;
-	}
+	const unsigned cpus = usable_cpu_count();
 
-	unsigned threads = requested ? requested : hardware;
+	unsigned threads = requested ? requested : cpus;
 	threads = std::max( 1u, std::min( threads,
-	                                 (unsigned)std::min<std::uint64_t>( work_items, MAX_WORKERS ) ) );
+	                                 (unsigned)std::min<std::uint64_t>( work_items, cpus ) ) );
 
 	return threads;
 }

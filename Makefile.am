@@ -168,6 +168,8 @@ noinst_LIBRARIES += rfa/librfa.a
 rfa_librfa_a_SOURCES = \
 		rfa/RfaFormat.h \
 		rfa/RfaStamp.h \
+		rfa/CpuCount.h \
+		rfa/CpuCount.cc \
 		rfa/LzoCodec.h \
 		rfa/LzoCodec.cc \
 		rfa/RfaArchive.h \
