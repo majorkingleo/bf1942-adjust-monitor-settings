@@ -165,6 +165,21 @@ TestCasePtr test_debuglog_argv_without_a_value_is_an_error()
 		true );
 }
 
+TestCasePtr test_debuglog_unopenable_log_file_throws()
+{
+	// Load-bearing for main()'s try/catch: an unopenable log file has to fail loudly,
+	// because silently logging nowhere would look like success. This testcase prints one
+	// "Exception from: ..." line to stderr, the same way the argv one does.
+	return std::make_shared<TestCaseFuncNoInp>(
+		"debuglog_unopenable_log_file_throws",
+		false,
+		[]() {
+			ToolLog::Session session( "no/such/directory/cannot_write_here.log" );
+			return true;
+		},
+		true );
+}
+
 TestCasePtr test_debuglog_debug_flag_is_opt_in()
 {
 	return std::make_shared<TestCaseFuncNoInp>(

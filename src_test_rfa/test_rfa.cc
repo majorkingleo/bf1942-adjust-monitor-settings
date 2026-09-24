@@ -6,10 +6,10 @@
  * (e.g. src_test_cpputilsshared/test_cpputilsshared.cc).
  *
  * Phase 1 registers the harness self-tests and the vendored miniLZO codec tests;
- * Phase 2 adds the container model and the reader driven by the real fixtures. Still to
- * come:
- *   test_rfa_archive   writer, determinism across thread counts
- *   test_rfa_cli       CLI compatibility versus bin/*.orig.exe and tests/golden
+ * Phase 2 adds the container model, the reader and the writer; Phase 3 the rfaUnpack
+ * command line.
+ *
+ * main() is only the error boundary - the registration lives in make_test_cases().
  *
  * @author Copyright (c) 2026
  */
@@ -24,9 +24,20 @@
 
 #include "TestRunner.h"
 
+#include <exception>
+#include <iostream>
 #include <memory>
 
-int main( int argc, char ** argv )
+namespace {
+
+/**
+ * Builds the testcase list.
+ *
+ * Kept out of main() so that main() is nothing but the error boundary. An exception
+ * escaping the registration or the run would otherwise reach std::terminate with no
+ * message, and the runner has to be able to report a failure rather than die silently.
+ */
+TestCases make_test_cases()
 {
 	TestCases test_cases;
 
@@ -50,6 +61,7 @@ int main( int argc, char ** argv )
 	test_cases.push_back( test_debuglog_argv_takes_the_equals_form() );
 	test_cases.push_back( test_debuglog_argv_absent_means_no_log_file() );
 	test_cases.push_back( test_debuglog_argv_without_a_value_is_an_error() );
+	test_cases.push_back( test_debuglog_unopenable_log_file_throws() );
 	test_cases.push_back( test_debuglog_debug_flag_is_opt_in() );
 	test_cases.push_back( test_debuglog_strip_options_leaves_the_tool_arguments() );
 	test_cases.push_back( test_debuglog_session_writes_a_timestamped_line() );
@@ -123,5 +135,18 @@ int main( int argc, char ** argv )
 	test_cases.push_back( test_cli_f_accepts_a_basename_unlike_the_original() );
 	test_cases.push_back( test_cli_full_extract_of_the_fh_archive_matches_the_reader() );
 
-	return run_testcases( argc, argv, "rfa", test_cases );
+	return test_cases;
+}
+
+} // namespace
+
+int main( int argc, char ** argv )
+{
+	try {
+		return run_testcases( argc, argv, "rfa", make_test_cases() );
+
+	} catch( const std::exception & error ) {
+		std::cerr << "test runner failed: " << error.what() << std::endl;
+		return 1;
+	}
 }

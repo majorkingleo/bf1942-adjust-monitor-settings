@@ -140,4 +140,11 @@ Read `rfa-unpack/references/rfaunpack-cli.md` for the verified CLI behaviour, an
   `#include "common.h"` from inside its own `src_<program>/` directory.
 * One directory per subject: `src_<program>/` for a program, `lib<name>/` for a library.
   New shared code goes into `libcommon/`, never into a program directory.
+* Every `main()` is a try/catch boundary: report to `std::cerr` and **return 1** on failure.
+  0 means success, 1 means a usage, argument or I/O failure. The monitor tools used to fall
+  out of `main()` with 0 even after printing an error, which made a failure indistinguishable
+  from success. `rfaUnpack` keeps exiting 0 for a selection miss (`-i` out of range, a name it
+  cannot resolve) because `tests/golden/oracle-cli.json` pins the original's behaviour there.
+  `adjust_monitor_settings` records the failure in a status and still runs its `system("PAUSE")`,
+  so a double-clicked window does not close before the message is read.
 * One `test_<subject>.{cc,h}` pair per subject in `src_test_*/`.

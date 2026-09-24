@@ -104,6 +104,11 @@ void write_video_con( const std::string & path, const MonitorData & monitor )
 
 int main( int argc, char ** argv )
 {
+    // The window is meant to stay open when the program is started by double-click, so the
+    // pause at the end has to run on the failure path as well. That is why a failure is
+    // recorded in a status instead of returning straight out of the catch.
+    int status = 0;
+
     try {
 
         // installs Tools::x_debug; must be the first statement in main(), because every
@@ -176,8 +181,11 @@ int main( int argc, char ** argv )
         }
         std::cout << "done\n";
     } catch( const std::exception & error ) {
-        std::cerr << error.what() << std::endl;       
+        std::cerr << error.what() << std::endl;
+        status = 1;
     }
 
     system("PAUSE");
+
+    return status;
 }
