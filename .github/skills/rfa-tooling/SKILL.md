@@ -64,6 +64,26 @@ it can report failure. Fixtures: `tests/data/` (real archives), `tests/data/gold
 writer's oracle). Tests resolve `tests/data` relative to the current directory, so run them from
 the repo root or set `RFA_TEST_DATA_DIR`.
 
+## Shipping to the consumer repository
+
+These binaries are used outside this repository too: `E:\progs\bf_pablov_mod` (a **separate git
+repository**, the KWG mod) runs them as `bin\rfaPack.exe` / `bin\rfaUnpack.exe`, with the 2004
+originals kept beside them as `*.orig.exe`. That repository carries its own skill, `rfa-pack-unpack`,
+which documents the swap, the symptom table and how to fall back.
+
+Two tasks drive it, and `tools/deploy_rfa_tools.ps1` does the work:
+
+| Task | What it does |
+|---|---|
+| `deploy rfa tools` | builds, strips, installs both binaries, keeps the originals, verifies what landed by hash, and rewrites the hash table in the consumer's skill |
+| `verify deployed rfa tools` | runs the consumer's `Test-RfaTools.ps1` against a real 20 MB level archive, comparing our output with the 2004 originals file by file |
+
+Strip before copying — the build carries `-g` debug info, 31 MB per binary against 2 MB stripped. The
+script also zeroes the PE `TimeDateStamp` and `CheckSum`, because `strip` stamps the header with the
+*current* time: without that, identical source deploys different bytes on every run and the
+consumer's git shows a binary change that means nothing. Verified by forcing a relink in between —
+the deployed hash does not move.
+
 ## The CLI contract, as ours differs from the original
 
 ```

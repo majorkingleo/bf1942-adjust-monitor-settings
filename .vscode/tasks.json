@@ -116,6 +116,52 @@
             }
         },
         {
+            "label": "deploy rfa tools",
+            "detail": "Build, strip and install rfaPack/rfaUnpack into E:\\progs\\bf_pablov_mod\\bin (backs up the 2004 originals as *.orig.exe)",
+            "type": "shell",
+            "command": "${workspaceFolder}\\tools\\deploy_rfa_tools.ps1",
+            "options": {
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": [
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File"
+                    ]
+                }
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "verify deployed rfa tools",
+            "detail": "Run the consumer repository's own check on the deployed rfaPack/rfaUnpack, comparing against the 2004 originals on a real archive",
+            "type": "shell",
+            "command": "& 'E:\\progs\\bf_pablov_mod\\.github\\skills\\rfa-pack-unpack\\scripts\\Test-RfaTools.ps1' -Archive 'origin\\Mods\\FH\\Archives\\bf1942\\levels\\Nuenen-1944.rfa'",
+            "options": {
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": [
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-Command"
+                    ]
+                }
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
             "label": "rebuild",
             "detail": "Clean then build",
             "dependsOrder": "sequence",

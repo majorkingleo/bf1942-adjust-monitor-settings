@@ -1,3 +1,40 @@
+commit a1b3dcd2242f9e631dfd0f26c35783badec9f2fe
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 23:37:13 2026 +0200
+
+    Add the rfa-tooling skill, and correct what "byte-identical" covers
+    
+    The repository had three skills for USING the RFA tools and none for working ON them, so the
+    knowledge that makes this reimplementation possible was spread over PLAN_rfa_tools.md, AGENTS.md,
+    the commit log and code comments. `.github/skills/rfa-tooling/` collects it: the hard rules that
+    have each already cost a debugging session, the layout, our CLI contract and where it diverges from
+    the original, a checklist for adding a switch, and - as `scripts/verify.ps1` - the four proof
+    obligations in runnable form:
+    
+      1. store mode is byte-identical to the oracle's archive
+      2. compress mode is byte-identical to it, with one exception (below)
+      3. no thread count changes a single byte
+      4. the 2003 tools still read what we wrote, checked by grepping for CRASH and not by the exit
+         code, which is 0 even after `ERROR! CRASH  Decompression()!`
+    
+    Writing obligation 2 down is what exposed finding 34. "Our `-Compress` output is byte-identical to
+    rfaPack.exe's" is true for the trees tested so far (the 618-entry menu tree, the synthetic 110 MB
+    tree) and false for `tests/data/golden/tree`, which holds a zero-length file. Removing that one
+    file makes the same tree byte-identical, so the cause is not match selection: LZO 2.10's 999 emits
+    3 bytes for an empty input where the 2003 encoder emits 4 (`11 00 00` against `11 11 00 00`), that
+    entry's block is 19 bytes instead of 20, and every later dataOffset shifts by one. The 200000-byte
+    blob in the same tree matches byte for byte.
+    
+    What makes it worth recording is the effect on the tool that is meant to read us: on our archive
+    `bin\rfaUnpack.orig.exe` reports `ERROR! CRASH  Decompression()!` where the oracle's own archive
+    reads cleanly. It still exits 0 and still extracts all 12 files, which is exactly why the
+    exit-code check never saw it - so finding 27's closure is now recorded as conditional, and
+    `verify.ps1 -Strict` fails until the single-case fix (write the era's 4-byte payload for a
+    zero-length input) is written. The writer itself is untouched here; the default `verify.ps1` run
+    is green with two skips that name the gap.
+    
+    Also updates AGENTS.md's skills table and the fact list in that direction.
+
 commit 7de71e861f159318d5e6df8abbcd3800819f2622
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 23:30:42 2026 +0200
