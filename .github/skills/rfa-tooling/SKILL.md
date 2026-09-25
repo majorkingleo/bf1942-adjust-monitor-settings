@@ -78,11 +78,13 @@ Two tasks drive it, and `tools/deploy_rfa_tools.ps1` does the work:
 | `deploy rfa tools` | builds, strips, installs both binaries, keeps the originals, verifies what landed by hash, and rewrites the hash table in the consumer's skill |
 | `verify deployed rfa tools` | runs the consumer's `Test-RfaTools.ps1` against a real 20 MB level archive, comparing our output with the 2004 originals file by file |
 
-Strip before copying — the build carries `-g` debug info, 31 MB per binary against 2 MB stripped. The
-script also zeroes the PE `TimeDateStamp` and `CheckSum`, because `strip` stamps the header with the
-*current* time: without that, identical source deploys different bytes on every run and the
-consumer's git shows a binary change that means nothing. Verified by forcing a relink in between —
-the deployed hash does not move.
+Strip before copying — the build carries `-g` debug info, 31 MB per binary against 2 MB stripped.
+Reproducibility needs both halves of the chain, and each half is measured: `Makefile.am` links with
+`-Wl,--no-insert-timestamp` inside its `MINGW` branch, so the RAW binary is a function of the source
+(two forced relinks give the same hash), and the script zeroes the PE `TimeDateStamp` and `CheckSum`
+afterwards because `strip` overwrites that zero with the *current* time. Without the second half,
+identical source would still deploy different bytes and the consumer's git would show a binary
+change that means nothing.
 
 ## The CLI contract, as ours differs from the original
 

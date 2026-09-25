@@ -137,7 +137,12 @@ LIBS=-lole32 -luuid -liconv
 AM_LDFLAGS= -static
 	
 if MINGW
-AM_LDFLAGS +=
+# ld stamps the PE header's TimeDateStamp with the current time, so a rebuild of unchanged
+# sources produced different binaries. Zeroing it is what makes the build reproducible - and it
+# matters beyond tidiness: these programs are installed into another repository, where a binary
+# diff that means nothing buries the ones that mean something. A PE-only linker option, hence the
+# branch (a Linux build must not see it).
+AM_LDFLAGS += -Wl,--no-insert-timestamp
 # with -std=c++11 WIN32 is disabled (_WIN32) would be the valid one, so we define it in mingw.
 AM_CPPFLAGS += -DWIN32
 else

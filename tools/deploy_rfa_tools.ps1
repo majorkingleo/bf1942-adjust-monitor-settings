@@ -57,9 +57,12 @@ function Format-Size ( $bytes ) {
 	Zero the two PE header fields that carry no information for an executable.
 
 	`strip` stamps TimeDateStamp with the CURRENT time (measured: two runs a minute apart differ,
-	two runs in the same second do not), so the same source would deploy different bytes every
-	time and the consumer's repository would show a binary change that means nothing. Measured
-	otherwise: the stripped file differs from the unstripped one in exactly these fields.
+	two runs in the same second do not, and it overwrites a zero that the linker left there), so the
+	same source would deploy different bytes every time and the consumer's repository would show a
+	binary change that means nothing. Makefile.am already links with -Wl,--no-insert-timestamp,
+	which handles the raw binary; this handles the STRIPPED one, which is what actually gets
+	deployed. Measured otherwise: a stripped file differs from the unstripped one in exactly these
+	fields.
 
 	TimeDateStamp is informational - a normal link with `--no-insert-timestamp` zeroes it too.
 	CheckSum is not verified for user-mode images and a plain `ld` link leaves it at 0; bfd fills

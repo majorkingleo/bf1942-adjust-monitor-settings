@@ -1,3 +1,29 @@
+commit 566cf465bd9cbaee4c9d43430a1934a50e4c2e4b
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Thu Sep 24 23:49:04 2026 +0200
+
+    Add a deploy task for the consumer repository, and strip reproducibly
+    
+    E:\progs\bf_pablov_mod runs these binaries as its own bin\rfaPack.exe / bin\rfaUnpack.exe, and
+    until now putting a new build there was a hand-made sequence of build, strip, copy and hash check,
+    with the hashes then recorded in that repository's skill. Two tasks and one script replace that:
+    
+      - "deploy rfa tools" builds, strips, installs, backs up the 2004 originals on the first run,
+        verifies what landed against what was staged, and rewrites the hash table in the consumer's
+        skill - so a redeploy cannot leave that table describing binaries that are no longer there;
+      - "verify deployed rfa tools" runs the consumer's own Test-RfaTools.ps1 against a real 20 MB level
+        archive, comparing our extraction with the 2004 original's file by file.
+    
+    Writing it turned up a real problem with the copy: strip writes the CURRENT time into the PE header.
+    Measured - two strips a minute apart differ, two in the same second do not, and the field does not
+    follow the input file's timestamp. Nothing about the code changes, so every deploy produced
+    different bytes and the consumer's git showed a binary change that meant nothing. The script now
+    zeroes TimeDateStamp and CheckSum, which makes the deployed bytes a function of the source alone.
+    Verified by forcing a genuine relink in between (delete the two binaries, make -j): the raw files'
+    hashes move, the deployed ones do not.
+    
+    The skill gains a section on this, next to the CLI contract it already documents.
+
 commit a1b3dcd2242f9e631dfd0f26c35783badec9f2fe
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 23:37:13 2026 +0200
