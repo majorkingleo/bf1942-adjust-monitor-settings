@@ -21,6 +21,7 @@
 #include "test_rfa_format.h"
 #include "test_rfa_writer.h"
 #include "test_testcommon.h"
+#include "test_version.h"
 
 #include "TestRunner.h"
 
@@ -68,6 +69,11 @@ TestCases make_test_cases()
 	test_cases.push_back( test_debuglog_second_session_appends() );
 	test_cases.push_back( test_debuglog_session_without_a_backend_writes_nothing() );
 	test_cases.push_back( test_debuglog_message_without_a_session_is_harmless() );
+
+	// --- version (libcommon) ----------------------------------------------
+	test_cases.push_back( test_version_recognises_only_the_version_spellings() );
+	test_cases.push_back( test_version_text_names_the_program_the_commit_and_the_origin() );
+	test_cases.push_back( test_version_stamp_is_well_formed() );
 
 	// --- lzo (vendored miniLZO) -------------------------------------------
 	test_cases.push_back( test_lzo_init() );
@@ -153,6 +159,7 @@ TestCases make_test_cases()
 	// --- CLI: --threads, both programs ------------------------------------
 	test_cases.push_back( test_cli_threads_switch_is_honoured_and_does_not_become_a_positional() );
 	test_cases.push_back( test_cli_threads_switch_does_not_change_the_archive() );
+	test_cases.push_back( test_cli_version_switch_answers_without_doing_work() );
 
 	return test_cases;
 }

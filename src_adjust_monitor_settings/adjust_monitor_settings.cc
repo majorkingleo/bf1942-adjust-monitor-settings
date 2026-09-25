@@ -14,6 +14,7 @@
 #include <memory>
 #include "common.h"
 #include "DebugLog.h"
+#include "ToolVersion.h"
 #include <CpputilsDebug.h>
 
 using namespace Tools;
@@ -115,6 +116,13 @@ int main( int argc, char ** argv )
         // CPPDEBUG below needs somewhere to go for as long as the session lives
         const ToolLog::Session log( ToolLog::log_file_from_argv( argc, argv ),
                                     ToolLog::debug_flag_from_argv( argc, argv ) );
+
+        // Before the monitor is queried and before the pause at the end of main(): a version
+        // request starts no work and asks nobody to press a key.
+        if( ToolVersion::requested( ToolLog::strip_options( argc, argv ) ) ) {
+            ToolVersion::print( std::cout, "adjust_monitor_settings" );
+            return 0;
+        }
 
         auto monitor = get_monitor_data();
 

@@ -22,6 +22,8 @@
 
 #include "ThreadSwitch.h"
 
+#include "ToolVersion.h"
+
 #include "rfa/RfaWriter.h"
 
 #include <chrono>
@@ -194,6 +196,13 @@ std::uint64_t total_bytes( const std::vector<rfa::SourceFile> & files )
 
 int run_pack( const std::vector<std::string> & args, std::ostream & out, std::ostream & err )
 {
+	// Before parse() and before any argument is validated: this is a question about the binary,
+	// and it has to answer even when the rest of the command line is nonsense.
+	if( ToolVersion::requested( args ) ) {
+		ToolVersion::print( out, "rfaPack" );
+		return 0;
+	}
+
 	const Options options = parse( args );
 
 	// On stdout, like every other argument error of this program: stderr carries the

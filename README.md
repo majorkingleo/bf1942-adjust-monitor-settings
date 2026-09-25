@@ -14,8 +14,8 @@ Two groups, five programs:
 | [`rfaPack`](#rfapack) | creates `.rfa` archives |
 
 Windows console applications, cross-compiled with mingw from a Cygwin shell. Every one of them
-accepts the same two logging switches — see [Logging](#logging) — and exits **0** on success and
-**1** on a usage, argument or I/O failure.
+accepts the same two logging switches — see [Logging](#logging) — and `-v` / `--version` — see
+[Version](#version) — and exits **0** on success and **1** on a usage, argument or I/O failure.
 
 ---
 
@@ -99,6 +99,7 @@ rfaUnpack.exe <Archive.rfa> [ExtractToPath] [-option]
 | `-i<index>` | extract the entry at this **0-based** position in the directory table |
 | `-f<name>` | extract by name — full internal path, or just the file name |
 | `-l<listFile>` | extract every name listed in the file, one per line, **full internal paths with `/`** |
+| `--threads N` | worker threads for a full extract; `0` (the default) is a third of the CPU count |
 
 * `ExtractToPath` is the **parent** directory; the archive's internal paths are recreated verbatim
   beneath it. It must already exist, otherwise `Error! Directory does not exist: <dir>` and exit 1.
@@ -112,7 +113,7 @@ rfaUnpack.exe <Archive.rfa> [ExtractToPath] [-option]
 ## rfaPack
 
 ```
-rfaPack.exe <sourceDir> <PackDirName> <Archive.rfa> [-u] [-Compress] [--lzo-fast]
+rfaPack.exe <sourceDir> <PackDirName> <Archive.rfa> [-u] [-Compress] [--lzo-fast] [--threads N]
 ```
 
 `sourceDir` is the directory whose contents become `<PackDirName>/…` inside the archive: packing
@@ -123,14 +124,25 @@ rfaPack.exe <sourceDir> <PackDirName> <Archive.rfa> [-u] [-Compress] [--lzo-fast
 | *(none)* | **store**: version 0, entries stored raw |
 | `-Compress` | **compress**: version 1, entries in independent 32 KiB LZO1X-999 chunks |
 | `--lzo-fast` | compress with LZO1X-1 instead of LZO1X-999 |
+| `--threads N` | worker threads for compression; `0` (the default) is the CPU count |
 | `-u` | update an existing archive — **not implemented**, see below |
 
 **Which mode to use.** Store and compress both produce output that is **byte-identical to
-`bin\rfaPack.orig.exe`**, so either is safe to hand to the game or to the original tools. Compress
-is by far the smaller one — on the shipped 618-entry `menu.rfa` tree, 7.96 MB against 22.95 MB —
-and packing it is ~4.7× faster than the original. `--lzo-fast` is for when speed matters more than
-size: it is ~3× faster per byte and ~21% larger, and the 2003 tools cannot read its streams (the
-game can). It warns on stderr, because that trade must not be silent.
+`bin\rfaPack.orig.exe`** for a tree without empty files, so either is safe to hand to the game or
+to the original tools. (A zero-length entry is the one exception: LZO 2.10 writes a 3-byte payload
+where the 2003 encoder writes 4, which the 2003 tools then report as
+`ERROR! CRASH  Decompression()!` while still extracting everything. Pack such a tree with
+`rfaPack.orig.exe` if a 2003 tool has to read it.) Compress is by far the smaller one — on the
+shipped 618-entry `menu` tree, 7.96 MB against 22.95 MB — and packing it is about **19× faster**
+than the original (0.10 s against 1.87 s); on a 110 MB tree the gap is 23.8×. `--lzo-fast` is for
+when speed matters more than size: it is ~3× faster per byte and ~21% larger, and the 2003 tools
+cannot read its streams (the game can). It warns on stderr, because that trade must not be silent.
+
+`--threads` is accepted by both tools as `--threads N`, `--threads=N`, `-j N` or `-jN`, and `0`
+means the default. Neither default is a guess: packing is CPU-bound and uses every core, while
+extraction is limited by the filesystem — and by a virus scanner inspecting every new file — which
+saturates at about four concurrent writers. In store mode `rfaPack` has no work to hand out and
+reports ` Threads: 1`.
 
 `-u` is recognised and echoed the way the original echoes it, then refused with
 `Error! -u is not implemented yet` and exit 1. Asking for an update must not quietly produce a
@@ -160,6 +172,36 @@ synchronous shutdown) and its pitfalls are described in `libcommon/` and in
 `.github/skills/debug-logging/`.
 
 ---
+
+## Version
+
+Every program answers `-v`, `-V`, `--version` and `--VERSION` — the long form case-insensitively,
+like the other switches:
+
+```text
+rfaPack 0.2
+  commit   b5e0d7c (2026-09-25)
+  repo     https://github.com/majorkingleo/bf1942-adjust-monitor-settings
+  author   Martin Oberzalek
+```
+
+It prints that and exits **0** without doing any work — no archive is written, nothing is
+extracted, `Video.con` is not touched and nothing waits for a keypress. The commit is the one the
+binary was **built** from and is compiled in, so it answers from a copy of the `.exe` with no
+source tree anywhere near it.
+
+The value comes from `version_stamp.h`, which **`make` generates** from
+`tools/make_version_stamp.sh` — not from `configure` — so a tree that is several commits ahead of
+the last `configure` still reports the truth. The recipe rewrites the header only when its content
+changes, so an unchanged stamp cannot cause a rebuild.
+
+It holds **no build timestamp**, deliberately: the build is reproducible (see [Build](#build)), and
+a "built at" string would quietly undo that, because two builds of the same source would produce
+different binaries again.
+
+`-v` is not a switch the 2003 tools had: `rfaUnpack` ignored unknown switches and `rfaPack` read
+them as positional arguments. A caller that used to pass `-v` as a harmless no-op now gets the
+version block and no work done instead.
 
 ## Build
 

@@ -7,6 +7,7 @@
 #include "common.h"
 #include "DebugLog.h"
 #include "ShortcutProvider.h"
+#include "ToolVersion.h"
 #include <CpputilsDebug.h>
 #include <cppdir.h>
 #include <stderr_exception.h>
@@ -58,6 +59,13 @@ int main( int argc, char ** argv )
 		                            ToolLog::debug_flag_from_argv( argc, argv ) );
 
 		CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
+		// After the log session and before COM starts doing work: a version request must answer
+		// without touching the desktop or the registry.
+		if( ToolVersion::requested( ToolLog::strip_options( argc, argv ) ) ) {
+			ToolVersion::print( std::cout, "create_desktop_icons" );
+			return 0;
+		}
 
 		std::string start = CppDir::pwd();
 

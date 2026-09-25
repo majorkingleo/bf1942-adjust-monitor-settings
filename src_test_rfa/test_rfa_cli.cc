@@ -1246,3 +1246,79 @@ TestCasePtr test_cli_threads_switch_does_not_change_the_archive()
 		},
 		std::ios::out );
 }
+TestCasePtr test_cli_version_switch_answers_without_doing_work()
+{
+	// -v / --version is ours - the 2003 tools had no such switch - and it has to behave like the
+	// question it is: answer, exit 0, do nothing else. The behaviour difference is worth pinning:
+	// rfaUnpack IGNORED unknown switches and rfaPack read them as positional arguments, so a
+	// caller that happened to pass `-v` used to get its work done, and now gets the version block
+	// and no work instead.
+	return std::make_shared<TestCaseFuncOneFile>(
+		"cli_version_switch_answers_without_doing_work",
+		[]( const std::string & scratch_file ) {
+			Scratch work( scratch_file + ".version" );
+
+			const std::string src = work.subdir( "src" );
+
+			if( !write_file( src + "/one.txt", "x" ) ) {
+				return false;
+			}
+
+			int rc = 0;
+			std::string err;
+
+			const std::string archive = work.path( "version.rfa" );
+
+			const std::string out =
+				run_pack( { "rfaPack.exe", src, "menu", archive, "--version" }, rc, err );
+
+			if( rc != 0
+			    || !contains( out, "rfaPack " )
+			    || !contains( out, "commit" )
+			    || !contains( out, "github.com/majorkingleo/bf1942-adjust-monitor-settings" )
+			    || !contains( out, "Martin Oberzalek" ) ) {
+				std::cout << "[rfa] --version did not answer:\n" << out << "\n";
+				return false;
+			}
+
+			// A question about the binary must not pack anything.
+			if( std::filesystem::exists( archive ) || contains( out, "TotalFiles" ) ) {
+				std::cout << "[rfa] --version went to work:\n" << out << "\n";
+				return false;
+			}
+
+			// The other spellings mean the same thing.
+			for( const char * spelling : { "-v", "--VERSION" } ) {
+				const std::string spoken = run_pack(
+					{ "rfaPack.exe", src, "menu", work.path( "spelling.rfa" ), spelling }, rc, err );
+
+				if( rc != 0 || !contains( spoken, "Martin Oberzalek" ) ) {
+					std::cout << "[rfa] " << spelling << " did not answer:\n" << spoken << "\n";
+					return false;
+				}
+			}
+
+			int urc = 0;
+			const std::string uout = run( { "rfaUnpack.exe", "-v" }, urc );
+
+			if( urc != 0 || !contains( uout, "rfaUnpack " ) || !contains( uout, "Martin Oberzalek" ) ) {
+				std::cout << "[rfa] rfaUnpack -v did not answer:\n" << uout << "\n";
+				return false;
+			}
+
+			// It answered INSTEAD of extracting, which is the difference to the original.
+			if( contains( uout, "strExtractPath" ) || contains( uout, "LoadIndex" ) ) {
+				std::cout << "[rfa] rfaUnpack -v went to work:\n" << uout << "\n";
+				return false;
+			}
+
+			// And the block is opt-in: an ordinary run must not print it.
+			const std::string plain =
+				run_pack( { "rfaPack.exe", src, "menu", work.path( "plain.rfa" ) }, rc, err );
+
+			return rc == 0
+			    && !contains( plain, "github.com" )
+			    && !contains( plain, "Martin Oberzalek" );
+		},
+		std::ios::out );
+}

@@ -1,3 +1,28 @@
+commit b5e0d7cc457d125158feef4a9a8004d3a09d34bd
+Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
+Date:   Fri Sep 25 12:30:49 2026 +0200
+
+    Link without a PE timestamp, so a rebuild produces the same bytes
+    
+    -Wl,--no-insert-timestamp in the MINGW branch of AM_LDFLAGS. ld filled the PE header's
+    TimeDateStamp with the current time, which was the one reason a rebuild of unchanged sources
+    produced different binaries. Measured: two consecutive relinks of rfaPack/rfaUnpack now give
+    identical hashes, and objdump reports the field as the epoch. It is a PE-only option, so it stays
+    inside the MINGW conditional - a Linux build must not see it.
+    
+    Why it is worth the flag: these programs get installed into E:\progs\bf_pablov_mod, where a binary
+    diff that means nothing buries the ones that mean something. With it in place, a redeploy from a
+    freshly relinked build wrote byte-identical files and that repository's bin\ stayed clean - the
+    first time that has been true.
+    
+    The deploy script still zeroes TimeDateStamp and CheckSum, because strip overwrites the zero with
+    the current time as it rewrites the file: measured, a raw binary whose field the linker set to zero
+    comes back stamped with the moment of stripping. The two halves cover different halves of the chain
+    - the linker the raw binary, the script the stripped one that actually gets installed - and both
+    places now say so.
+    
+    Suite unchanged: 94 testcases, and test_rfa.exe is linked with the flag as well.
+
 commit 566cf465bd9cbaee4c9d43430a1934a50e4c2e4b
 Author: Martin Oberzalek <martin.oberzalek@anton-paar.com>
 Date:   Thu Sep 24 23:49:04 2026 +0200

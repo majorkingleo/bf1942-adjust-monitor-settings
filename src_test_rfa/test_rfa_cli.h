@@ -33,4 +33,7 @@ TestCasePtr test_cli_pack_store_output_is_byte_identical_to_the_oracle_archive()
 TestCasePtr test_cli_threads_switch_is_honoured_and_does_not_become_a_positional();
 TestCasePtr test_cli_threads_switch_does_not_change_the_archive();
 
+// -v / --version, ours as well
+TestCasePtr test_cli_version_switch_answers_without_doing_work();
+
 

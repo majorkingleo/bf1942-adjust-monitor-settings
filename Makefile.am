@@ -109,7 +109,9 @@ libcommon_libcommon_a_SOURCES = \
 		libcommon/AsyncFileLogger.h \
 		libcommon/AsyncFileLogger.cc \
 		libcommon/DebugLog.h \
-		libcommon/DebugLog.cc
+		libcommon/DebugLog.cc \
+		libcommon/ToolVersion.h \
+		libcommon/ToolVersion.cc
 
 adjust_monitor_settings_LDADD = \
 	libcommon/libcommon.a \
@@ -148,6 +150,27 @@ AM_CPPFLAGS += -DWIN32
 else
 AM_LDFLAGS +=
 endif
+
+# ---------------------------------------------------------------------------
+# Version stamp
+#
+# The commit the binaries were built from, which `-v` / `--version` prints. Generated at MAKE
+# time rather than at configure time, so a tree that is a few commits ahead of the last configure
+# still reports the truth - and with a compare-then-write, so an unchanged stamp keeps its own
+# timestamp and cannot cause a rebuild. The generator itself records why it holds no build
+# timestamp of its own: that would undo the reproducible build the linker flags below set up.
+# ---------------------------------------------------------------------------
+
+BUILT_SOURCES = version_stamp.h
+CLEANFILES = version_stamp.h
+
+version_stamp.h: FORCE
+	@$(SHELL) '$(top_srcdir)/tools/make_version_stamp.sh' '$(top_srcdir)' > $@.tmp; \
+	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv -f $@.tmp $@; echo "  version stamp regenerated"; fi
+
+FORCE:
+
+.PHONY: FORCE
 
 # ---------------------------------------------------------------------------
 # Test suite (make check)
@@ -288,6 +311,8 @@ test_rfa_SOURCES = \
 		src_test_rfa/test_debuglog.cc \
 		src_test_rfa/test_rfa_cli.h \
 		src_test_rfa/test_rfa_cli.cc \
+		src_test_rfa/test_version.h \
+		src_test_rfa/test_version.cc \
 		tools_config.h
 
 test_rfa_LDADD = \
@@ -306,7 +331,8 @@ ACLOCAL_AMFLAGS = -I m4
 
 EXTRA_DIST = \
 	README.md \
-	LICENSE 
+	LICENSE \
+	tools/make_version_stamp.sh
 	
 	
 	

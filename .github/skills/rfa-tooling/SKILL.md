@@ -64,6 +64,16 @@ it can report failure. Fixtures: `tests/data/` (real archives), `tests/data/gold
 writer's oracle). Tests resolve `tests/data` relative to the current directory, so run them from
 the repo root or set `RFA_TEST_DATA_DIR`.
 
+`make` also regenerates `version_stamp.h` from `tools/make_version_stamp.sh` — the commit `-v`
+prints. It is a `BUILT_SOURCES` entry with a compare-then-write recipe: rewritten only when its
+content changes, so it cannot cause a rebuild, and generated at *make* time rather than configure
+time, so a tree several commits ahead of the last `configure` still reports the truth. A testcase
+can only check its SHAPE (no subprocess in the suite); the guarantee that it names the right commit
+comes from the rule running on every make.
+⚠️ It holds **no build timestamp** on purpose. The build is reproducible — the linker is told not to
+write a PE timestamp, the deploy script zeroes the one `strip` adds — and a "built at" string would
+undo that. Do not add one.
+
 ## Shipping to the consumer repository
 
 These binaries are used outside this repository too: `E:\progs\bf_pablov_mod` (a **separate git
@@ -101,6 +111,11 @@ rfaPack.exe   <sourceDir> <baseFolderName> <archive.rfa> [-u] [-Compress] [--lzo
 * `--lzo-fast` is **ours**: LZO1X-1 instead of the era's LZO1X-999. Faster, ~21% larger, and the
   shipped 2003 tools *cannot* read its streams (the game can). It is the only thing this program
   writes to **stderr**; a warning must stay distinguishable from a refusal by the stream alone.
+* `-v` / `--version` is **ours** too, on all five programs: it prints the name, the version, the
+  commit the binary was built from, the repository URL and the author, then exits 0 without doing
+  any work. `libcommon/ToolVersion.h` holds it; the commit comes from the generated
+  `version_stamp.h` (see "Build and test"). It is checked *before* parsing, so it answers even when
+  the rest of the command line is nonsense.
 * Entry names are `"<base folder name>/" + relative path`. `RfaPack.exe <dir> menu out.rfa`
   stores `menu/...`, and extraction therefore lands in `<target>/menu/...`. Tests find extracted
   files with `tree_files(target)` rather than guessing a path.

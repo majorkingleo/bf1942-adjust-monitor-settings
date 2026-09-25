@@ -19,6 +19,8 @@
 
 #include "ThreadSwitch.h"
 
+#include "ToolVersion.h"
+
 #include "rfa/CpuCount.h"
 #include "rfa/ParallelFor.h"
 #include "rfa/RfaArchive.h"
@@ -276,6 +278,13 @@ bool extract_by_name( std::ostream & out,
 
 int run_unpack( const std::vector<std::string> & args, std::ostream & out )
 {
+	// Before parse() and before the target directory is resolved: a version request must answer
+	// without touching the filesystem, and without the usage block.
+	if( ToolVersion::requested( args ) ) {
+		ToolVersion::print( out, "rfaUnpack" );
+		return 0;
+	}
+
 	const Options options = parse( args );
 
 	if( options.thread_switch == ThreadSwitch::MissingValue ) {
