@@ -51,6 +51,8 @@ INSTALL
 adjust_monitor_settings.exe
 create_desktop_icons.exe
 list_monitor_resolutions.exe
+bf1942_query.exe
+bf1942_discover.exe
 rfaUnpack.exe
 rfaPack.exe
 
@@ -94,3 +96,6 @@ __pycache__/
 *.pyo
 .pytest_cache/
 examples
+
+# stats collector output (stats_collector/bf1942_stats.py)
+stats.db

@@ -1,6 +1,8 @@
 bin_PROGRAMS=adjust_monitor_settings \
 	create_desktop_icons \
 	list_monitor_resolutions \
+	bf1942_query \
+	bf1942_discover \
 	rfaPack \
 	rfaUnpack
 
@@ -17,6 +19,21 @@ create_desktop_icons_SOURCES=\
 		src_create_desktop_icons/create_desktop_icons.cc \
 		src_create_desktop_icons/ShortcutProvider.h \
 		src_create_desktop_icons/ShortcutProvider.cc
+
+bf1942_query_SOURCES=\
+		tools_config.h \
+		src_bf1942_query/bf1942_query.cc
+
+bf1942_discover_SOURCES=\
+		tools_config.h \
+		src_bf1942_discover/bf1942_discover.cc
+
+# Native GameSpy/ASE query client and LAN beacon listener. Self-contained
+# except for the Winsock library on Windows; on POSIX sockets live in libc.
+if MINGW
+bf1942_query_LDADD = -lws2_32
+bf1942_discover_LDADD = -lws2_32
+endif
 			  
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/libcommon \

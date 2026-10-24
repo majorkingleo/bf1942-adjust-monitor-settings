@@ -87,6 +87,68 @@ list_monitor_resolutions.exe
 
 ---
 
+## bf1942_query
+
+A native (C++23, mingw/Windows) GameSpy/ASE **query client** — a second, compiled approach to
+reading live BF1942 stats, alongside the Python `stats_collector/` tool. It sends the same UDP
+`\status\` request the in-game server browser uses and prints the live scoreboard:
+
+```text
+bf1942_query.exe <host> [--port N] [--interval SECONDS] [--csv]
+```
+
+| Option | Meaning |
+|---|---|
+| *(none)* | one query, print the scoreboard |
+| `--port N` | GameSpy query port (default `23000`) |
+| `--interval S` | poll every S seconds instead of a single query |
+| `--csv` | machine-readable CSV, one row per player |
+
+```text
+NativeTest | map=Omaha | 2/32 players
+player                    score kills deaths  ping team
+-------------------------------------------------------
+MajorLeo                     25     5      2    40    1
+Rotane                       10     1      5    55    2
+```
+
+The query returns `score`, `kills`, `deaths`, `ping` and `team` per player — **not** shots fired,
+which exist only in the server's event log (see `stats_collector/`). The server must have querying
+enabled (`game.serverInternet 1` + `game.gameSpyPort 23000` in the active mod's
+`ServerSettings.con`); otherwise the probe times out and the tool exits 1. Built as a
+self-contained program — its only extra link dependency is Winsock (`-lws2_32`) on Windows.
+
+---
+
+## bf1942_discover
+
+A native passive **LAN server-discovery** client. It listens on the broadcast port and prints
+every BF1942 server that announces itself, without joining or querying:
+
+```text
+bf1942_discover.exe [--port N] [--timeout SECONDS] [--csv]
+```
+
+```text
+listening on UDP 54915 for BF1942 LAN beacons...
+server Mk-VII  guid {50709c01-5d47-4dbc-8162-7ca9f2e8c5df}  at 10.0.0.7
+```
+
+| Option | Meaning |
+|---|---|
+| *(none)* | listen forever (Ctrl-C to stop) |
+| `--port N` | beacon port (default `54915`) |
+| `--timeout S` | stop after S seconds |
+| `--csv` | `name,guid,address` rows |
+
+The server broadcasts a 263-byte UDP beacon to `255.255.255.255:54915` roughly once a second.
+The beacon carries the server name and GUID as readable strings (the rest of the payload is the
+game leaking internal memory addresses, so it is deliberately not decoded further). This gives
+server *presence* — not live stats; for stats use `bf1942_query` (live scoreboard) or the event
+log pipeline in `stats_collector/`.
+
+---
+
 ## rfaUnpack
 
 ```
@@ -273,6 +335,8 @@ The full model, with the measurement behind every rule, is in
 |---|---|
 | `libcommon/` | shared code of the monitor tools and the logging session (`libcommon.a`) |
 | `src_adjust_monitor_settings/`, `src_create_desktop_icons/`, `src_list_monitor_resolutions/` | the monitor tools, one directory each |
+| `src_bf1942_query/` | native GameSpy/ASE query client (live BF1942 scoreboard) |
+| `src_bf1942_discover/` | native passive LAN server-discovery client (reads the beacon) |
 | `rfa/` | `.rfa` container reader/writer and the LZO codec (`librfa.a`) |
 | `cli/` | the command lines, as a library so tests can call the same entry points (`libcli.a`) |
 | `src_rfaUnpack/`, `src_rfaPack/` | thin program wrappers over `cli/` |
@@ -282,6 +346,7 @@ The full model, with the measurement behind every rule, is in
 | `third_party/lzo/` | vendored LZO — five sources holding the LZO1X-999 compressor the archives use |
 | `cpputils/` | vendored utility library (a **git submodule**; nothing of ours goes in it) |
 | `tools/` | Python probes and generators — oracle driver, format validator, golden capture |
+| `stats_collector/` | Python BF1942 stats pipeline — event-log parser, SQLite store, query/poll/watch |
 | `.github/skills/` | domain knowledge: `.rfa` unpacking, the standalone-map workflow, debug logging |
 
 `AGENTS.md` holds the conventions and the verified facts a contributor needs before touching

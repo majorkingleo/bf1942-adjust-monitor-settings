@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<bf:log version="1.1" xmlns:bf="http://www.dice.se/xmlns/bf/1.1">
+  <bf:server>
+    <bf:setting name="server name">MAJORLEO</bf:setting>
+    <bf:setting name="port">14567</bf:setting>
+    <bf:setting name="dedicated">0</bf:setting>
+    <bf:setting name="modid">bf1942</bf:setting>
+    <bf:setting name="mapid">berlin</bf:setting>
+    <bf:setting name="map">Berlin</bf:setting>
+    <bf:setting name="game mode">GPM_CQ</bf:setting>
+    <bf:setting name="maxplayers">32</bf:setting>
+  </bf:server>
+  <bf:round timestamp="2026-10-24 12:00:00">
+    <bf:event name="GEStatsShots" timestamp="2026-10-24 12:01:00">
+      <bf:param type="int" name="player_id">0</bf:param>
+      <bf:param type="string" name="weapon">M1Garand</bf:param>
+    </bf:event>
+    <bf:event name="GEStatsShots" timestamp="2026-10-24 12:01:01">
+      <bf:param type="int" name="player_id">0</bf:param>
+      <bf:param type="string" name="weapon">M1Garand</bf:param>
+    </bf:event>
+    <bf:event name="GEStatsHits" timestamp="2026-10-24 12:01:02">
+      <bf:param type="int" name="player_id">0</bf:param>
+      <bf:param type="string" name="weapon">M1Garand</bf:param>
+    </bf:event>
+    <bf:event name="GEStatsKills" timestamp="2026-10-24 12:01:03">
+      <bf:param type="int" name="player_id">0</bf:param>
+      <bf:param type="string" name="weapon">M1Garand</bf:param>
+    </bf:event>
+    <bf:event name="scoreEvent" timestamp="2026-10-24 12:01:03">
+      <bf:param type="int" name="player_id">0</bf:param>
+      <bf:param type="int" name="victim_id">1</bf:param>
+      <bf:param type="string" name="weapon">M1Garand</bf:param>
+      <bf:param type="string" name="score_type">Kill</bf:param>
+    </bf:event>
+    <bf:event name="scoreEvent" timestamp="2026-10-24 12:01:04">
+      <bf:param type="int" name="player_id">1</bf:param>
+      <bf:param type="int" name="victim_id">1</bf:param>
+      <bf:param type="string" name="score_type">Death</bf:param>
+    </bf:event>
+    <bf:roundstats timestamp="2026-10-24 12:10:00">
+      <bf:teamtickets team="1">80</bf:teamtickets>
+      <bf:teamtickets team="2">0</bf:teamtickets>
+      <bf:winningteam>1</bf:winningteam>
+      <bf:victorytype>tickets</bf:victorytype>
+      <bf:playerstat playerid="0">
+        <bf:statparam name="player_name">MajorLeo</bf:statparam>
+        <bf:statparam name="is_ai">0</bf:statparam>
+        <bf:statparam name="team">1</bf:statparam>
+        <bf:statparam name="score">25</bf:statparam>
+        <bf:statparam name="kills">5</bf:statparam>
+        <bf:statparam name="deaths">2</bf:statparam>
+        <bf:statparam name="tks">0</bf:statparam>
+        <bf:statparam name="captures">1</bf:statparam>
+        <bf:statparam name="attacks">0</bf:statparam>
+        <bf:statparam name="defences">0</bf:statparam>
+        <bf:statparam name="objectives">0</bf:statparam>
+        <bf:statparam name="objectivetks">0</bf:statparam>
+      </bf:playerstat>
+      <bf:playerstat playerid="1">
+        <bf:statparam name="player_name">Rotane</bf:statparam>
+        <bf:statparam name="is_ai">0</bf:statparam>
+        <bf:statparam name="team">2</bf:statparam>
+        <bf:statparam name="score">0</bf:statparam>
+        <bf:statparam name="kills">1</bf:statparam>
+        <bf:statparam name="deaths">5</bf:statparam>
+        <bf:statparam name="tks">0</bf:statparam>
+        <bf:statparam name="captures">0</bf:statparam>
+        <bf:statparam name="attacks">0</bf:statparam>
+        <bf:statparam name="defences">0</bf:statparam>
+        <bf:statparam name="objectives">0</bf:statparam>
+        <bf:statparam name="objectivetks">0</bf:statparam>
+      </bf:playerstat>
+    </bf:roundstats>
+  </bf:round>
+</bf:log>
