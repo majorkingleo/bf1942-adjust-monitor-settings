@@ -135,9 +135,9 @@ class MockGameSpyServer:
 class QueryTests(unittest.TestCase):
     RESPONSE = (
         b"\\gamename\\battlefield1942\\gamever\\1.6\\hostname\\TestServer"
-        b"\\mapname\\Berlin\\numplayers\\2\\maxplayers\\32"
-        b"\\player_0\\MajorLeo\\score_0\\25\\kills_0\\5\\deaths_0\\2\\ping_0\\40\\team_0\\1"
-        b"\\player_1\\Rotane\\score_1\\10\\kills_1\\1\\deaths_1\\5\\ping_1\\55\\team_1\\2"
+        b"\\mapname\\Berlin\\gametype\\conquest\\numplayers\\2\\maxplayers\\32"
+        b"\\playername_0\\MajorLeo\\score_0\\25\\kills_0\\5\\deaths_0\\2\\ping_0\\40\\team_0\\1"
+        b"\\playername_1\\Rotane\\score_1\\10\\kills_1\\1\\deaths_1\\5\\ping_1\\55\\team_1\\2"
         b"\\queryid\\1.1"
     )
 
@@ -159,12 +159,24 @@ class QueryTests(unittest.TestCase):
         finally:
             server.close()
 
+    def test_playername_scan_past_numplayers(self):
+        # BF1942 can report numplayers=1 while listing more player rows.
+        resp = (
+            b"\\hostname\\S\\mapname\\M\\numplayers\\1\\maxplayers\\32"
+            b"\\playername_0\\Alice\\score_0\\1\\kills_0\\1\\deaths_0\\0\\ping_0\\5\\team_0\\1"
+            b"\\playername_1\\Bob\\score_1\\2\\kills_1\\0\\deaths_1\\1\\ping_1\\6\\team_1\\2"
+            b"\\queryid\\1.0"
+        )
+        fields = stats.parse_gamespy_response(resp)
+        players = stats.extract_players(fields)
+        self.assertEqual([p["name"] for p in players], ["Alice", "Bob"])
+
     def test_store_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             conn = stats.init_db(os.path.join(tmp, "q.db"))
             fields = stats.parse_gamespy_response(self.RESPONSE)
             players = stats.extract_players(fields)
-            snap_id = stats.store_snapshot(conn, "10.0.0.7", 23000, fields, players)
+            snap_id = stats.store_snapshot(conn, "10.0.0.7", 22000, fields, players)
             self.assertEqual(
                 conn.execute("SELECT COUNT(*) FROM scoreboard_players").fetchone()[0], 2)
             self.assertEqual(
@@ -174,6 +186,11 @@ class QueryTests(unittest.TestCase):
                 (snap_id,),
             ).fetchone()
             self.assertEqual(row[0], 5)
+            snap = conn.execute(
+                "SELECT map_name, game_type FROM scoreboard_snapshots WHERE id = ?",
+                (snap_id,),
+            ).fetchone()
+            self.assertEqual(snap, ("Berlin", "conquest"))
             conn.close()
 
 

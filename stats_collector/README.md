@@ -178,15 +178,17 @@ protocol — the same UDP protocol the in-game server browser uses:
 
 ```powershell
 # poll a server every 5 s and store scoreboard snapshots
-python stats_collector\bf1942_stats.py poll stats.db 10.0.0.7 --port 23000 --interval 5
+python stats_collector\bf1942_stats.py poll stats.db 10.0.0.7 --port 22000 --interval 5
 
 # print the latest snapshot
 python stats_collector\bf1942_stats.py scoreboard stats.db
 ```
 
 The query returns `hostname`, `mapname`, `numplayers`, `maxplayers` and, per
-player, `score_<n>`, `kills_<n>`, `deaths_<n>`, `ping_<n>`, `team_<n>`. It does
-**not** include shots fired — that exists only in the server's event log.
+player, `score_<n>`, `kills_<n>`, `deaths_<n>`, `ping_<n>`, `team_<n>`. The
+player name is `playername_<n>`, `numplayers` can be smaller than the listed
+players, and `score` can be negative (a suicide is −2). It does **not** include
+shots fired — that exists only in the server's event log.
 
 A compiled, native alternative for the same query lives in the repo as
 [`bf1942_query.exe`](../README.md#bf1942_query) (`src_bf1942_query/`, built by
@@ -209,17 +211,10 @@ payloads on port 14567. The gameplay stream is binary Refractor2 object state +
 events with no plaintext, so this is a RE aid, not a stats source.
 
 **The server must have querying enabled**, otherwise the UDP probe times out.
-In the server's active mod `Settings\ServerSettings.con`:
-
-```con
-game.serverInternet 1
-game.gameSpyPort 23000
-```
-
-(or `game.ASEPort` for the All-Seeing Eye flavour). Restart the server, then
-read the actual port from the server console lines
-`GameSpy query port: ...` / `ASE query port: ...` and pass it with `--port`.
-The classic default is UDP **23000**.
+The reference server (MK-VII) answers on **UDP 22000** (the All-Seeing Eye
+`game.ASEPort`); the classic GameSpy default is **23000**. Read the actual port
+from the server console lines `GameSpy query port: ...` / `ASE query port: ...`
+and pass it with `--port`.
 
 ### Example analytics SQL
 

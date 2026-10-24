@@ -114,9 +114,10 @@ Rotane                       10     1      5    55    2
 
 The query returns `score`, `kills`, `deaths`, `ping` and `team` per player — **not** shots fired,
 which exist only in the server's event log (see `stats_collector/`). The server must have querying
-enabled (`game.serverInternet 1` + `game.gameSpyPort 23000` in the active mod's
-`ServerSettings.con`); otherwise the probe times out and the tool exits 1. Built as a
-self-contained program — its only extra link dependency is Winsock (`-lws2_32`) on Windows.
+enabled; the reference server (MK-VII) answers on **UDP 22000** (`bf1942_query.exe 10.0.0.7 --port 22000`),
+the All-Seeing Eye port, while the classic GameSpy default is 23000. Otherwise the probe times out
+and the tool exits 1. Built as a self-contained program — its only extra link dependency is Winsock
+(`-lws2_32`) on Windows.
 
 ---
 

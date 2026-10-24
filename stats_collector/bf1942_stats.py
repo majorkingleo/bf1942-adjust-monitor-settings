@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS scoreboard_snapshots (
     query_port INTEGER,
     ts TEXT NOT NULL,
     map_name TEXT,
+    game_type TEXT,
     numplayers INTEGER,
     maxplayers INTEGER,
     raw_json TEXT
@@ -184,6 +185,11 @@ def open_db(path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)  # idempotent: ensures schema exists on a fresh db
+    # Lightweight migration: databases created before the game_type column
+    # existed still work after the schema above adds it to new databases.
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(scoreboard_snapshots)")}
+    if "game_type" not in cols:
+        conn.execute("ALTER TABLE scoreboard_snapshots ADD COLUMN game_type TEXT")
     conn.commit()
     return conn
 
@@ -592,13 +598,18 @@ def parse_gamespy_response(data: bytes) -> dict:
 
 
 def extract_players(fields: dict) -> list[dict]:
-    """Pull the per-player rows out of a parsed status response."""
-    num = _int_or_none(fields.get("numplayers")) or 0
+    """Pull the per-player rows out of a parsed status response.
+
+    BF1942 spells the name field ``playername_<n>`` and ``numplayers`` can be
+    smaller than the actual list, so scan indices until the first gap.
+    """
+    maxplayers = _int_or_none(fields.get("maxplayers")) or 0
+    cap = maxplayers if maxplayers > 0 else 128
     players = []
-    for i in range(num):
-        name = fields.get("player_%d" % i)
+    for i in range(cap):
+        name = fields.get("playername_%d" % i)
         if name is None:
-            continue
+            break
         players.append({
             "name": name,
             "score": _int_or_none(fields.get("score_%d" % i)),
@@ -615,10 +626,10 @@ def store_snapshot(conn: sqlite3.Connection, host: str, port: int,
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     cur = conn.execute(
         "INSERT INTO scoreboard_snapshots"
-        "(server_address, query_port, ts, map_name, numplayers, maxplayers, raw_json) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "(server_address, query_port, ts, map_name, game_type, numplayers, maxplayers, raw_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            host, port, ts, _text(fields.get("mapname")),
+            host, port, ts, _text(fields.get("mapname")), _text(fields.get("gametype")),
             _int_or_none(fields.get("numplayers")), _int_or_none(fields.get("maxplayers")),
             json.dumps(fields, ensure_ascii=False),
         ),
@@ -648,10 +659,11 @@ def poll(conn: sqlite3.Connection, host: str, port: int, interval: int) -> None:
                 fields = parse_gamespy_response(data)
                 players = extract_players(fields)
                 snapshot_id = store_snapshot(conn, host, port, fields, players)
-                print("[%s] %s | %s | %d/%d players | snapshot %d" % (
+                print("[%s] %s | map=%s | type=%s | %d/%d players | snapshot %d" % (
                     time.strftime("%H:%M:%S"),
                     fields.get("hostname", host),
                     fields.get("mapname", "?"),
+                    fields.get("gametype", "?"),
                     len(players),
                     _int_or_none(fields.get("maxplayers")) or 0,
                     snapshot_id))
@@ -662,15 +674,15 @@ def poll(conn: sqlite3.Connection, host: str, port: int, interval: int) -> None:
 
 def show_scoreboard(conn: sqlite3.Connection) -> None:
     row = conn.execute(
-        "SELECT id, ts, server_address, query_port, map_name, numplayers, maxplayers "
+        "SELECT id, ts, server_address, query_port, map_name, game_type, numplayers, maxplayers "
         "FROM scoreboard_snapshots ORDER BY id DESC LIMIT 1"
     ).fetchone()
     if row is None:
         print("No scoreboard snapshots yet.")
         return
-    snap_id, ts, addr, port, map_name, num, maxn = row
-    print("%s  %s:%s  map=%s  %s/%s players" % (
-        ts, addr, port, map_name or "?", num or 0, maxn or 0))
+    snap_id, ts, addr, port, map_name, game_type, num, maxn = row
+    print("%s  %s:%s  map=%s  type=%s  %s/%s players" % (
+        ts, addr, port, map_name or "?", game_type or "?", num or 0, maxn or 0))
     rows = conn.execute(
         "SELECT name, score, kills, deaths, ping, team FROM scoreboard_players "
         "WHERE snapshot_id = ? ORDER BY score DESC, kills DESC",

@@ -196,18 +196,24 @@ void print_snapshot( const std::map<std::string,std::string> & f, bool csv, bool
     const int numplayers = to_int( get_field( f, "numplayers" ) );
     const std::string hostname = get_field( f, "hostname" );
     const std::string mapname = get_field( f, "mapname" );
+    const std::string gametype = get_field( f, "gametype" );
     const int maxplayers = to_int( get_field( f, "maxplayers" ) );
     const std::string ts = with_time ? timestamp() : std::string();
 
+    // BF1942 spells the player name field "playername_<n>", and "numplayers"
+    // can be smaller than the actual list, so scan until the first gap.
+    const int cap = maxplayers > 0 ? maxplayers : 128;
+
     if( csv ) {
         const std::string tscol = with_time ? ts + "," : "";
-        for( int i = 0; i < numplayers; ++i ) {
-            const std::string name = get_field( f, "player_" + std::to_string( i ) );
+        for( int i = 0; i < cap; ++i ) {
+            const std::string name = get_field( f, "playername_" + std::to_string( i ) );
             if( name.empty() )
-                continue;
+                break;
             std::cout << tscol
                       << csv_escape( hostname ) << ","
                       << csv_escape( mapname ) << ","
+                      << csv_escape( gametype ) << ","
                       << numplayers << ","
                       << maxplayers << ","
                       << csv_escape( name ) << ","
@@ -223,6 +229,7 @@ void print_snapshot( const std::map<std::string,std::string> & f, bool csv, bool
     if( with_time )
         std::cout << ts << "  ";
     std::cout << hostname << " | map=" << ( mapname.empty() ? "?" : mapname )
+              << " | type=" << ( gametype.empty() ? "?" : gametype )
               << " | " << numplayers << "/" << maxplayers << " players\n";
 
     std::cout << std::left  << std::setw( 24 ) << "player"
@@ -234,10 +241,10 @@ void print_snapshot( const std::map<std::string,std::string> & f, bool csv, bool
               << "\n";
     std::cout << std::string( 55, '-' ) << "\n";
 
-    for( int i = 0; i < numplayers; ++i ) {
-        const std::string name = get_field( f, "player_" + std::to_string( i ) );
+    for( int i = 0; i < cap; ++i ) {
+        const std::string name = get_field( f, "playername_" + std::to_string( i ) );
         if( name.empty() )
-            continue;
+            break;
         std::cout << std::left  << std::setw( 24 ) << name
                   << std::right << std::setw( 7 )  << get_field( f, "score_" + std::to_string( i ) )
                   << std::setw( 6 )  << get_field( f, "kills_" + std::to_string( i ) )

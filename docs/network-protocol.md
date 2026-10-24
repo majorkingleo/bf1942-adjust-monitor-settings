@@ -73,9 +73,21 @@ then the binary body. This has not been pinned down.
 
 **Not yet decoded:** the per-shot (`GEStatsShots`), per-hit (`GEStatsHits`),
 kill (`GEStatsKills`) and score (`GEScoreMsg`) events. They are delta-compressed
-binary events without markers, so locating them needs a capture synchronised
-with a known action (e.g. "I just fired 3 shots, got 1 hit, 1 kill") and a diff
-of the packets around that moment.
+binary events without markers.
+
+**Synchronised suicide capture** (`traffic2.pcapng`) gives a concrete lead. The
+player logged in and killed themselves; the relevant traffic is:
+
+* join: client → server **84-byte** at t≈23.0 s;
+* suicide: client → server **21-byte** at t≈31.3 s
+  (`02 c3 f2 ff 07 00 00 0c 00 02 81 20 b0 db 9a a2 88 08 d4 1e 05`) — the only
+  21-byte client packet in the capture, so a likely command/event frame;
+* death + respawn: server → client **649-byte**, **483-byte** and **109-byte**
+  burst at t≈31.5–31.8 s.
+
+The death is confirmed independently via the server query (player `deaths=1`,
+`score=-2`). Diffing a *kill* capture against this *suicide* capture should
+isolate the score-event packet.
 
 ---
 
@@ -95,37 +107,46 @@ join here does not show how names are serialised.
 
 ---
 
-## 5. GameSpy / ASE server query (decoded)
+## 5. GameSpy / ASE server query (decoded, live-verified)
 
 The same UDP protocol the in-game server browser uses. `bf1942_query` implements
 it.
 
-* Request (UDP): `\status\`
+* Request (UDP): `\status\` (8 bytes)
 * Response: a backslash-delimited `\key\value\...` stream, possibly split over
-  several datagrams, terminated by `\queryid\<n.m>` (or `\final\`):
+  several datagrams, terminated by `\final\` + `\queryid\<n.m>`:
 
 ```
-\gamename\battlefield1942\gamever\1.6\hostname\...\mapname\...\
-numplayers\N\maxplayers\M\
-player_0\<name>\score_0\S\kills_0\K\deaths_0\D\ping_0\P\team_0\T\
+\gamename\bfield1942\gamever\v1.61\hostname\MK-VII\hostport\14567\
+mapname\Bocage\numplayers\3\maxplayers\32\gametype\conquest\
+tickets1\180\tickets2\180\roundTimeRemain\925\status\4\...
+\playername_0\[TK]LieutenantORF\score_0\0\kills_0\0\deaths_0\0\ping_0\0\team_0\2\
+\playername_1\[TK]der.General\...\
 ...
-\queryid\1.1
+\teamname_0\axis\teamname_1\allied\
+\final\\queryid\202.1
 ```
+
+Verified live against the reference server: it answers on **UDP 22000** (the
+All-Seeing Eye port — `game.ASEPort`), **not** the classic GameSpy 23000, so:
+
+```powershell
+bf1942_query.exe 10.0.0.7 --port 22000
+```
+
+Gotchas discovered from the real response:
+
+* The player name field is **`playername_<n>`** — not `player_<n>`.
+* `numplayers` can be **smaller** than the number of listed players (the
+  reference server reported `numplayers\3` while listing 4 players), so scan
+  player rows until the first missing `playername_<n>`.
+* `score` can be **negative** (a suicide is −2) and `ping` is 0 until the
+  server has measured it.
 
 It exposes **live score, kills, deaths, ping and team per player** — but **not
-shots fired**, and no history.
-
-**It only answers if the server enables it.** On the reference server the query
-ports are `0`, so the probe times out. Enable with (in the active mod's
-`Settings\ServerSettings.con`):
-
-```con
-game.serverInternet 1
-game.gameSpyPort 23000
-```
-
-The exact port is printed at server start as `GameSpy query port: ...` /
-`ASE query port: ...`. `game.ASEPort` serves the All-Seeing Eye flavour.
+shots fired**, and no history. The query only works while the server has it
+enabled; it is on here (port 22000), but a server with `game.ASEPort 0` /
+`game.gameSpyPort 0` will time out.
 
 ---
 
