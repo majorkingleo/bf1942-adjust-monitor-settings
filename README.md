@@ -347,6 +347,7 @@ The full model, with the measurement behind every rule, is in
 | `cpputils/` | vendored utility library (a **git submodule**; nothing of ours goes in it) |
 | `tools/` | Python probes and generators — oracle driver, format validator, golden capture |
 | `stats_collector/` | Python BF1942 stats pipeline — event-log parser, SQLite store, query/poll/watch |
+| `docs/` | recovered BF1942 network-protocol notes (`network-protocol.md`) |
 | `.github/skills/` | domain knowledge: `.rfa` unpacking, the standalone-map workflow, debug logging |
 
 `AGENTS.md` holds the conventions and the verified facts a contributor needs before touching
