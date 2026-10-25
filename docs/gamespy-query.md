@@ -36,6 +36,45 @@ or ignore unrecognized fields rather than assuming this list is exhaustive.
 | `status` | Server status value | Observed in a live response; its numeric meaning is not established here |
 | `teamname_<n>` | Team name for indexed team `<n>` | Example: `teamname_0=axis`, `teamname_1=allied` |
 
+### Server rule fields
+
+BF1942 also exposes its server configuration through the same key/value
+interface. These keys are returned by `\status\` as well as by `\rules\`.
+They are **configuration values, not live match state**, and their values are
+sent as strings, including any unit suffix (`10s`, `90%`). The concrete values
+below are examples from a live FH-mod server; the set and values depend on the
+server and mod.
+
+| Key | Meaning | Notes / example |
+|---|---|---|
+| `active_mods` | Active mod/modification identifiers | Example: `FH` |
+| `allied_team_ratio`, `axis_team_ratio` | Team-size balance ratios | Example: `1` |
+| `allow_nose_cam` | Whether the cockpit nose camera is allowed | `yes`/`no`; example: `yes` |
+| `auto_balance_teams` | Whether teams are balanced automatically | `on`/`off`; example: `off` |
+| `bandwidth_choke_limit` | Server bandwidth choke limit | Example: `0`; unit not established here |
+| `content_check` | Whether the server checks client content | Numeric flag; example: `0` |
+| `cpu` | CPU-related server setting | Numeric; example: `4590`; precise semantics not established here |
+| `external_view` | Whether external (third-person) views are allowed | `on`/`off`; example: `on` |
+| `free_camera` | Whether the free camera is allowed | `on`/`off`; example: `off` |
+| `game_start_delay` | Delay before a round starts | Duration string; example: `10s` |
+| `hit_indicator` | Whether hit indicators are shown | `on`/`off`; example: `on` |
+| `kickback` | Weapon kickback strength | Percentage string; example: `0%` |
+| `kickback_on_splash` | Weapon kickback from splash damage | Percentage string; example: `0%` |
+| `name_tag_distance` | Distance at which infantry name tags are visible | Example: `50`; unit not established here |
+| `name_tag_distance_scope` | Name-tag distance while using a scope | Example: `300` |
+| `number_of_rounds` | Number of rounds per match | Example: `1` |
+| `soldier_friendly_fire` | Friendly-fire damage multiplier for soldiers | Percentage string; example: `100%` |
+| `soldier_friendly_fire_on_splash` | Soldier friendly-fire multiplier for splash damage | Percentage string; example: `100%` |
+| `spawn_delay` | Delay before a player may spawn | Duration string; example: `3s` |
+| `spawn_wave_time` | Interval between spawn waves | Duration string; example: `7s` |
+| `sv_punkbuster` | Whether PunkBuster is enabled | Numeric flag; example: `0` |
+| `ticket_ratio` | Ticket ratio/bleed setting | Percentage string; example: `90%` |
+| `time_limit` | Round time limit | Example: `20` (minutes) |
+| `tk_mode` | Team-kill handling mode | Example: `forgive` |
+| `unpure_mods` | Mods permitted without a purity check | String/list; example: empty |
+| `vehicle_friendly_fire` | Friendly-fire damage multiplier for vehicles | Percentage string; example: `100%` |
+| `vehicle_friendly_fire_on_splash` | Vehicle friendly-fire multiplier for splash damage | Percentage string; example: `100%` |
+
 ### Per-player fields
 
 Player data is indexed from zero. The player-name key is `playername_<n>`:
@@ -100,3 +139,61 @@ configured query port, which is a separate port.
 [stats collector](../stats_collector/README.md) both send `\status\` and parse
 the key/value response. They display or store the live server summary and
 indexed scoreboard fields described above.
+
+## Probing a live server: `tools/bf1942_gamespy_probe.py`
+
+[`bf1942_gamespy_probe.py`](../tools/bf1942_gamespy_probe.py) is a dependency-
+free probe for answering "what does *this* server actually return?". It
+auto-detects the query port (22000, 23000, the game port, or an explicit
+`--scan` range), sends `\status\` plus the other GameSpy verbs (`\basic\`,
+`\info\`, `\rules\`, `\players\`, optionally `\getinfo\`, `\getstatus\`,
+`\echo\`, `\list\`), reassembles multi-datagram replies and prints every
+key/value pair grouped into server / teams / players. Keys that are not in the
+tables above are listed separately, and keys or values that look vehicle-
+related are called out.
+
+```bash
+# one shot, auto-detect the port
+./tools/bf1942_gamespy_probe.py 10.0.0.28
+
+# raw datagrams + JSON
+./tools/bf1942_gamespy_probe.py 10.0.0.28 --port 22000 --hex --json
+
+# enter/leave a vehicle while it polls and print a field diff per poll
+./tools/bf1942_gamespy_probe.py 10.0.0.28 --port 22000 --watch 120
+
+# compare against a snapshot taken while on foot
+./tools/bf1942_gamespy_probe.py 10.0.0.28 --save on_foot.json
+./tools/bf1942_gamespy_probe.py 10.0.0.28 --diff on_foot.json --watch 60
+```
+
+`--watch` is the empirical vehicle test: if entering a vehicle exposed any
+state, a key would be added or a value would change. (Volatile fields such as
+`queryid`, `roundTimeRemain`, `tickets1/2` and the uninitialised-looking
+`averageFPS` do change on their own; the probe reports them but they are not
+vehicle state.)
+
+BF1942's query parser is strict: only the bare `\status\` frame works.
+Appending `\queryid\1.1` — which other GameSpy servers accept — makes it drop
+the request silently (`--all-variants` demonstrates this). The response itself
+already carries `\final\` and `\queryid\<n.m>`.
+
+### Vehicle data: not exposed
+
+A live probe of a FH-mod server (`MAJORLEO`, Adak Island) on UDP 22000 returned
+61 keys in the `\status\` reply: the documented server fields, two `teamname_*`
+entries, one player row, and ~40 additional **server-rule** keys that `\rules\`
+returns as well — including `vehicle_friendly_fire`,
+`vehicle_friendly_fire_on_splash`, `spawn_delay`, `spawn_wave_time`,
+`ticket_ratio`, `allow_nose_cam`, and so on. These are configuration values,
+not live state: there is no `vehicle_<n>`, `vehicle`, `pco_id`, `seat_<n>` or
+kit field for a player, and entering/leaving a vehicle adds no key and changes
+no player field.
+
+So the answer to "can the query retrieve vehicle data?" is **no** — neither
+which vehicle a player occupies nor vehicle health/position/seat. Vehicle
+identity (`GESetVehicle`, `GEExitVehicle`, `pco_id`, `vehicle_pos`) appears only
+in the binary gameplay stream and in the server event log's `bf:event` params
+(see [network-protocol.md](network-protocol.md) §3 and §7.3). The event log is
+written on the server host and is the only readable source for vehicle-related
+events.
